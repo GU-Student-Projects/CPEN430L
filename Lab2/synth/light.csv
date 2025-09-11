@@ -1,0 +1,6 @@
+# Pin Assignments
+
+To, Direction, Location
+x1, input, PIN_AB28
+x2, input, PIN_AC28
+f, output, PIN_E21

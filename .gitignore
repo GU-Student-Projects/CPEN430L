@@ -53,3 +53,16 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+db/
+output_files/
+incremental_db/
+work/
+*.lst
+*.mti
+*.mpf
+*.qws
+*.bak
+*.wlf
+*.qpf
+*.qsf
