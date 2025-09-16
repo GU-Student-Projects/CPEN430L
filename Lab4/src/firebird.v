@@ -21,21 +21,28 @@ module firebird (
     assign rst_n = KEY[3];
     
     // Debounce the switch inputs
-    debouncer #(.DEBOUNCE_BITS(16)) debounce_left (
+    // Use smaller debounce counter for simulation
+    `ifdef SIMULATION
+        localparam DEBOUNCE_COUNT = 10;  // Very fast for simulation
+    `else
+        localparam DEBOUNCE_COUNT = 19;  // ~10.5ms for real hardware
+    `endif
+    
+    debouncer #(.DEBOUNCE_BITS(DEBOUNCE_COUNT)) debounce_left (
         .clk(CLOCK_50),
         .rst_n(rst_n),
         .sw_in(SW[2]),
         .sw_out(left_req_debounced)
     );
     
-    debouncer #(.DEBOUNCE_BITS(16)) debounce_right (
+    debouncer #(.DEBOUNCE_BITS(DEBOUNCE_COUNT)) debounce_right (
         .clk(CLOCK_50),
         .rst_n(rst_n),
         .sw_in(SW[1]),
         .sw_out(right_req_debounced)
     );
     
-    debouncer #(.DEBOUNCE_BITS(16)) debounce_hazard (
+    debouncer #(.DEBOUNCE_BITS(DEBOUNCE_COUNT)) debounce_hazard (
         .clk(CLOCK_50),
         .rst_n(rst_n),
         .sw_in(SW[0]),
@@ -43,7 +50,16 @@ module firebird (
     );
     
     // Instantiate the counter for timing
-    counter timing_gen (
+    // Use faster counter for simulation
+    `ifdef SIMULATION
+        localparam COUNTER_VAL = 24'd10_000;  // Fast for simulation (200us)
+    `else
+        localparam COUNTER_VAL = 24'd8_750_000;  // 175ms for real hardware
+    `endif
+    
+    counter #(
+        .COUNTER_MAX(COUNTER_VAL)
+    ) timing_gen (
         .clk(CLOCK_50),
         .rst_n(rst_n),
         .enable(enable_pulse)
