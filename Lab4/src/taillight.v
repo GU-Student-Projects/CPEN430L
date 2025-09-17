@@ -1,5 +1,5 @@
 // taillight.v - Sequential taillight pattern controller
-// Manages the 3-segment sweep pattern for turn signals and hazards
+// Manages the 3-segment sweep pattern for turn signals, hazards, and brake
 
 module taillight (
     input wire clk,           // System clock
@@ -8,15 +8,16 @@ module taillight (
     input wire left_req,      // Left turn request
     input wire right_req,     // Right turn request
     input wire hazard_req,    // Hazard request
+    input wire brake_req,          // Brake request
     output reg [2:0] left_leds,  // Left segment LEDs [7:5]
     output reg [2:0] right_leds  // Right segment LEDs [2:0]
 );
 
     // State encoding for the sequential pattern
     localparam S_OFF = 3'b000;
-    localparam S_1   = 3'b001;
-    localparam S_2   = 3'b011;
-    localparam S_3   = 3'b111;
+    localparam S_1   = 3'b001;   // one segment on
+    localparam S_2   = 3'b011;   // two segments on
+    localparam S_3   = 3'b111;   // all three segments on
     
     // State registers
     reg [1:0] left_state, left_state_next;
@@ -74,32 +75,42 @@ module taillight (
         end
     end
     
-    // Output logic for left LEDs (inner to outer pattern)
+    // Output logic with brake override
     always @(*) begin
-        if (hazard_req || left_req) begin
-            case (left_state)
-                2'b00: left_leds = S_OFF;  // 000
-                2'b01: left_leds = S_1;    // 001 (innermost)
-                2'b10: left_leds = S_2;    // 011
-                2'b11: left_leds = S_3;    // 111 (all on)
-                default: left_leds = S_OFF;
-            endcase
+        if (!brake_req) begin
+            // Brake pressed (active-low): all LEDs ON
+            left_leds  = 3'b111;
+            right_leds = 3'b111;
+        end else if (hazard_req || left_req || right_req) begin
+            // Normal signaling mode
+            // Left LEDs (inner → outer: LED5 → LED6 → LED7)
+            if (hazard_req || left_req) begin
+                case (left_state)
+                    2'b00: left_leds = S_OFF;
+                    2'b01: left_leds = S_1;
+                    2'b10: left_leds = S_2;
+                    2'b11: left_leds = S_3;
+                    default: left_leds = S_OFF;
+                endcase
+            end else begin
+                left_leds = S_OFF;
+            end
+
+            // Right LEDs (outer → inner: LED2 → LED1 → LED0)
+            if (hazard_req || right_req) begin
+                case (right_state)
+                    2'b00: right_leds = S_OFF;
+                    2'b01: right_leds = 3'b100; // LED2
+                    2'b10: right_leds = 3'b110; // LED2+LED1
+                    2'b11: right_leds = 3'b111; // LED2+LED1+LED0
+                    default: right_leds = S_OFF;
+                endcase
+            end else begin
+                right_leds = S_OFF;
+            end
         end else begin
-            left_leds = S_OFF;
-        end
-    end
-    
-    // Output logic for right LEDs (inner to outer pattern)
-    always @(*) begin
-        if (hazard_req || right_req) begin
-            case (right_state)
-                2'b00: right_leds = S_OFF;  // 000
-                2'b01: right_leds = S_1;    // 001 (innermost)
-                2'b10: right_leds = S_2;    // 011
-                2'b11: right_leds = S_3;    // 111 (all on)
-                default: right_leds = S_OFF;
-            endcase
-        end else begin
+            // Idle
+            left_leds  = S_OFF;
             right_leds = S_OFF;
         end
     end

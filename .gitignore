@@ -65,3 +65,5 @@ work/
 *.bak
 *.wlf
 *.qpf
+*.vvp
+*.vcd

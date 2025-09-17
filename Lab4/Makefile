@@ -15,8 +15,7 @@ EXECUTABLE = firebird_sim.vvp
 WAVEFORM = firebird_tb.vcd
 
 # Compilation flags
-FLAGS = -g2005-sv
-SIM_FLAGS = -D SIMULATION  # This enables fast debouncer in firebird.v
+FLAGS = -g2001
 
 # Default target
 all: compile
@@ -25,16 +24,8 @@ all: compile
 compile:
 	$(IVERILOG) $(FLAGS) -o $(EXECUTABLE) $(TESTBENCH) $(SOURCES)
 
-# Compile with simulation speedup
-compile_fast:
-	$(IVERILOG) $(FLAGS) $(SIM_FLAGS) -o $(EXECUTABLE) $(TESTBENCH) $(SOURCES)
-
 # Run simulation
 run: compile
-	$(VVP) $(EXECUTABLE)
-
-# Run fast simulation
-run_fast: compile_fast
 	$(VVP) $(EXECUTABLE)
 
 # View waveform

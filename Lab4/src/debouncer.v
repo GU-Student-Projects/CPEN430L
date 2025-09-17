@@ -1,8 +1,7 @@
 // debouncer.v - Debounces mechanical switch inputs
 
 module debouncer #(
-    parameter DEBOUNCE_BITS = 19  // Default ~10.5ms at 50MHz (2^19 / 50MHz)
-                                   // Can be overridden for simulation
+    parameter DEBOUNCE_BITS = 16  // Number of bits for debounce counter
 )(
     input wire clk,           // System clock
     input wire rst_n,         // Active-low reset
