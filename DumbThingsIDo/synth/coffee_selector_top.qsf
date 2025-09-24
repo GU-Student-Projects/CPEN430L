@@ -171,10 +171,8 @@ set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE OFF
 
-# Clock Constraints
-create_clock -name clk -period "50 MHz" [get_ports clk]
-derive_pll_clocks
-derive_clock_uncertainty
+# SDC File Assignment (for timing constraints)
+set_global_assignment -name SDC_FILE coffee_selector.sdc
 
 # Optimize Hold Timing
 set_global_assignment -name OPTIMIZE_HOLD_TIMING "All Paths"
