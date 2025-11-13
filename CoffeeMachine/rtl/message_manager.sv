@@ -5,6 +5,7 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
+// Updated: Added SystemVerilog string handling for cleaner, more readable code
 //============================================================================
 
 `timescale 1ns/1ps
@@ -87,9 +88,6 @@ module message_manager (
     parameter SIZE_12OZ = 2'd1;
     parameter SIZE_16OZ = 2'd2;
     
-    // ASCII space character
-    parameter SPACE = 8'h20;
-    
     //========================================================================
     // Internal Registers
     //========================================================================
@@ -102,6 +100,27 @@ module message_manager (
     reg [7:0] progress_bar [0:15];  // 16 character progress bar
     
     //========================================================================
+    // Helper Function: LCD String Converter
+    // Converts a string literal to 128-bit LCD format with automatic padding
+    //========================================================================
+    
+    function automatic [127:0] lcd_str;
+        input string s;
+        int i;
+        byte unsigned c;
+        begin
+            // Initialize with spaces (ASCII 0x20)
+            lcd_str = {16{8'h20}};
+            
+            // Copy string characters (up to 16 chars)
+            for (i = 0; i < 16 && i < s.len(); i++) begin
+                c = s[i];
+                lcd_str[127-(i*8) -: 8] = c;
+            end
+        end
+    endfunction
+    
+    //========================================================================
     // Helper Function: Convert number to ASCII
     //========================================================================
     
@@ -112,17 +131,6 @@ module message_manager (
                 num_to_ascii = 8'h30 + num;  // '0' + num
             else
                 num_to_ascii = 8'h20;  // Space if out of range
-        end
-    endfunction
-    
-    //========================================================================
-    // Helper Function: Create string (pack into 128 bits)
-    //========================================================================
-    
-    function [127:0] create_string;
-        input [8*16-1:0] str;  // 16 characters
-        begin
-            create_string = str;
         end
     endfunction
     
@@ -153,8 +161,8 @@ module message_manager (
     
     always @(*) begin
         // Default: blank lines
-        line1_text_next = {16{SPACE}};
-        line2_text_next = {16{SPACE}};
+        line1_text_next = lcd_str("");
+        line2_text_next = lcd_str("");
         
         case (current_menu_state)
             
@@ -162,18 +170,13 @@ module message_manager (
             // SPLASH Screen
             //================================================================
             STATE_SPLASH: begin
-                // Line 1: "Press Start"
-                line1_text_next = {"P", "r", "e", "s", "s", " ", "S", "t", 
-                                 "a", "r", "t", " ", " ", " ", " ", " "};
+                line1_text_next = lcd_str("Press Start");
                 
-                // Line 2: Warning count or "Ready"
+                // Show warning count or "Ready"
                 if (warning_count > 0) begin
-                    line2_text_next = {"W", "a", "r", "n", "i", "n", "g", "s", 
-                                     ":", " ", num_to_ascii(warning_count), " ", 
-                                     " ", " ", " ", " "};
+                    line2_text_next = lcd_str($sformatf("Warnings: %0d", warning_count));
                 end else begin
-                    line2_text_next = {"R", "e", "a", "d", "y", " ", " ", " ",
-                                     " ", " ", " ", " ", " ", " ", " ", " "};
+                    line2_text_next = lcd_str("Ready");
                 end
             end
             
@@ -181,45 +184,35 @@ module message_manager (
             // CHECK ERRORS
             //================================================================
             STATE_CHECK_ERRORS: begin
-                line1_text_next = {"C", "h", "e", "c", "k", "i", "n", "g", 
-                                 ".", ".", ".", " ", " ", " ", " ", " "};
-                line2_text_next = {"P", "l", "e", "a", "s", "e", " ", "w",
-                                 "a", "i", "t", " ", " ", " ", " ", " "};
+                line1_text_next = lcd_str("Checking...");
+                line2_text_next = lcd_str("Please wait");
             end
             
             //================================================================
             // COFFEE SELECT
             //================================================================
             STATE_COFFEE_SELECT: begin
-                // Line 1: "Coffee: [X]"
+                // Show which coffee bin is selected
                 if (selected_coffee_type == 0) begin
-                    line1_text_next = {"C", "o", "f", "f", "e", "e", ":", " ",
-                                     "[", "1", "]", " ", " ", " ", " ", " "};
+                    line1_text_next = lcd_str("Coffee: [1]");
                     
-                    // Line 2: Show if unavailable
+                    // Show availability status
                     if (bin0_empty) begin
-                        line2_text_next = {"E", "m", "p", "t", "y", "!", " ", " ",
-                                         " ", " ", " ", " ", " ", " ", " ", " "};
+                        line2_text_next = lcd_str("Empty!");
                     end else if (bin0_low) begin
-                        line2_text_next = {"L", "o", "w", " ", " ", " ", " ", " ",
-                                         " ", " ", " ", " ", " ", " ", " ", " "};
+                        line2_text_next = lcd_str("Low");
                     end else begin
-                        line2_text_next = {"<", "-", ">", " ", "S", "e", "l", "e",
-                                         "c", "t", " ", " ", " ", " ", " ", " "};
+                        line2_text_next = lcd_str("<-> Select");
                     end
                 end else begin
-                    line1_text_next = {"C", "o", "f", "f", "e", "e", ":", " ",
-                                     "[", "2", "]", " ", " ", " ", " ", " "};
+                    line1_text_next = lcd_str("Coffee: [2]");
                     
                     if (bin1_empty) begin
-                        line2_text_next = {"E", "m", "p", "t", "y", "!", " ", " ",
-                                         " ", " ", " ", " ", " ", " ", " ", " "};
+                        line2_text_next = lcd_str("Empty!");
                     end else if (bin1_low) begin
-                        line2_text_next = {"L", "o", "w", " ", " ", " ", " ", " ",
-                                         " ", " ", " ", " ", " ", " ", " ", " "};
+                        line2_text_next = lcd_str("Low");
                     end else begin
-                        line2_text_next = {"<", "-", ">", " ", "S", "e", "l", "e",
-                                         "c", "t", " ", " ", " ", " ", " ", " "};
+                        line2_text_next = lcd_str("<-> Select");
                     end
                 end
             end
@@ -228,38 +221,28 @@ module message_manager (
             // DRINK SELECT
             //================================================================
             STATE_DRINK_SELECT: begin
-                line1_text_next = {"D", "r", "i", "n", "k", ":", " ", " ",
-                                 " ", " ", " ", " ", " ", " ", " ", " "};
-                
                 case (selected_drink_type)
                     DRINK_BLACK_COFFEE: begin
-                        line1_text_next = {"D", "r", "i", "n", "k", ":", " ", "[",
-                                         "B", "l", "a", "c", "k", "]", " ", " "};
+                        line1_text_next = lcd_str("Drink: [Black]");
                     end
                     DRINK_COFFEE_CREAM: begin
-                        line1_text_next = {"D", "r", "i", "n", "k", ":", " ", "[",
-                                         "C", "r", "e", "a", "m", "]", " ", " "};
+                        line1_text_next = lcd_str("Drink: [Cream]");
                     end
                     DRINK_LATTE: begin
-                        line1_text_next = {"D", "r", "i", "n", "k", ":", " ", "[",
-                                         "L", "a", "t", "t", "e", "]", " ", " "};
+                        line1_text_next = lcd_str("Drink: [Latte]");
                     end
                     DRINK_MOCHA: begin
-                        line1_text_next = {"D", "r", "i", "n", "k", ":", " ", "[",
-                                         "M", "o", "c", "h", "a", "]", " ", " "};
+                        line1_text_next = lcd_str("Drink: [Mocha]");
                     end
                     DRINK_HOT_CHOCOLATE: begin
-                        line1_text_next = {"D", "r", "i", "n", "k", ":", " ", "[",
-                                         "H", "o", "t", "C", "h", "o", "c", "o"};
+                        line1_text_next = lcd_str("Drink: [HotChoco");
                     end
                     default: begin
-                        line1_text_next = {"D", "r", "i", "n", "k", ":", " ", "?",
-                                         " ", " ", " ", " ", " ", " ", " ", " "};
+                        line1_text_next = lcd_str("Drink: ?");
                     end
                 endcase
                 
-                line2_text_next = {"<", "-", ">", " ", "S", "e", "l", "e",
-                                 "c", "t", " ", " ", " ", " ", " ", " "};
+                line2_text_next = lcd_str("<-> Select");
             end
             
             //================================================================
@@ -268,25 +251,20 @@ module message_manager (
             STATE_SIZE_SELECT: begin
                 case (selected_size)
                     SIZE_8OZ: begin
-                        line1_text_next = {"S", "i", "z", "e", ":", " ", "[", "8",
-                                         "o", "z", "]", " ", " ", " ", " ", " "};
+                        line1_text_next = lcd_str("Size: [8oz]");
                     end
                     SIZE_12OZ: begin
-                        line1_text_next = {"S", "i", "z", "e", ":", " ", "[", "1",
-                                         "2", "o", "z", "]", " ", " ", " ", " "};
+                        line1_text_next = lcd_str("Size: [12oz]");
                     end
                     SIZE_16OZ: begin
-                        line1_text_next = {"S", "i", "z", "e", ":", " ", "[", "1",
-                                         "6", "o", "z", "]", " ", " ", " ", " "};
+                        line1_text_next = lcd_str("Size: [16oz]");
                     end
                     default: begin
-                        line1_text_next = {"S", "i", "z", "e", ":", " ", "?", " ",
-                                         " ", " ", " ", " ", " ", " ", " ", " "};
+                        line1_text_next = lcd_str("Size: ?");
                     end
                 endcase
                 
-                line2_text_next = {"<", "-", ">", " ", "S", "e", "l", "e",
-                                 "c", "t", " ", " ", " ", " ", " ", " "};
+                line2_text_next = lcd_str("<-> Select");
             end
             
             //================================================================
@@ -297,55 +275,60 @@ module message_manager (
                 case (selected_drink_type)
                     DRINK_BLACK_COFFEE: begin
                         case (selected_size)
-                            SIZE_8OZ:  line1_text_next = {"B", "l", "a", "c", "k", " ", "8", "o", "z", " ", " ", " ", " ", " ", " ", " "};
-                            SIZE_12OZ: line1_text_next = {"B", "l", "a", "c", "k", " ", "1", "2", "o", "z", " ", " ", " ", " ", " ", " "};
-                            SIZE_16OZ: line1_text_next = {"B", "l", "a", "c", "k", " ", "1", "6", "o", "z", " ", " ", " ", " ", " ", " "};
+                            SIZE_8OZ:  line1_text_next = lcd_str("Black 8oz");
+                            SIZE_12OZ: line1_text_next = lcd_str("Black 12oz");
+                            SIZE_16OZ: line1_text_next = lcd_str("Black 16oz");
+                            default:   line1_text_next = lcd_str("Black ?oz");
                         endcase
                     end
                     DRINK_COFFEE_CREAM: begin
                         case (selected_size)
-                            SIZE_8OZ:  line1_text_next = {"C", "r", "e", "a", "m", " ", "8", "o", "z", " ", " ", " ", " ", " ", " ", " "};
-                            SIZE_12OZ: line1_text_next = {"C", "r", "e", "a", "m", " ", "1", "2", "o", "z", " ", " ", " ", " ", " ", " "};
-                            SIZE_16OZ: line1_text_next = {"C", "r", "e", "a", "m", " ", "1", "6", "o", "z", " ", " ", " ", " ", " ", " "};
+                            SIZE_8OZ:  line1_text_next = lcd_str("Cream 8oz");
+                            SIZE_12OZ: line1_text_next = lcd_str("Cream 12oz");
+                            SIZE_16OZ: line1_text_next = lcd_str("Cream 16oz");
+                            default:   line1_text_next = lcd_str("Cream ?oz");
                         endcase
                     end
                     DRINK_LATTE: begin
                         case (selected_size)
-                            SIZE_8OZ:  line1_text_next = {"L", "a", "t", "t", "e", " ", "8", "o", "z", " ", " ", " ", " ", " ", " ", " "};
-                            SIZE_12OZ: line1_text_next = {"L", "a", "t", "t", "e", " ", "1", "2", "o", "z", " ", " ", " ", " ", " ", " "};
-                            SIZE_16OZ: line1_text_next = {"L", "a", "t", "t", "e", " ", "1", "6", "o", "z", " ", " ", " ", " ", " ", " "};
+                            SIZE_8OZ:  line1_text_next = lcd_str("Latte 8oz");
+                            SIZE_12OZ: line1_text_next = lcd_str("Latte 12oz");
+                            SIZE_16OZ: line1_text_next = lcd_str("Latte 16oz");
+                            default:   line1_text_next = lcd_str("Latte ?oz");
                         endcase
                     end
                     DRINK_MOCHA: begin
                         case (selected_size)
-                            SIZE_8OZ:  line1_text_next = {"M", "o", "c", "h", "a", " ", "8", "o", "z", " ", " ", " ", " ", " ", " ", " "};
-                            SIZE_12OZ: line1_text_next = {"M", "o", "c", "h", "a", " ", "1", "2", "o", "z", " ", " ", " ", " ", " ", " "};
-                            SIZE_16OZ: line1_text_next = {"M", "o", "c", "h", "a", " ", "1", "6", "o", "z", " ", " ", " ", " ", " ", " "};
+                            SIZE_8OZ:  line1_text_next = lcd_str("Mocha 8oz");
+                            SIZE_12OZ: line1_text_next = lcd_str("Mocha 12oz");
+                            SIZE_16OZ: line1_text_next = lcd_str("Mocha 16oz");
+                            default:   line1_text_next = lcd_str("Mocha ?oz");
                         endcase
                     end
                     DRINK_HOT_CHOCOLATE: begin
                         case (selected_size)
-                            SIZE_8OZ:  line1_text_next = {"H", "o", "t", "C", "h", "o", "c", "o", " ", "8", "o", "z", " ", " ", " ", " "};
-                            SIZE_12OZ: line1_text_next = {"H", "o", "t", "C", "h", "o", "c", "o", " ", "1", "2", "o", "z", " ", " ", " "};
-                            SIZE_16OZ: line1_text_next = {"H", "o", "t", "C", "h", "o", "c", "o", " ", "1", "6", "o", "z", " ", " ", " "};
+                            SIZE_8OZ:  line1_text_next = lcd_str("HotChoco 8oz");
+                            SIZE_12OZ: line1_text_next = lcd_str("HotChoco 12oz");
+                            SIZE_16OZ: line1_text_next = lcd_str("HotChoco 16oz");
+                            default:   line1_text_next = lcd_str("HotChoco ?oz");
                         endcase
+                    end
+                    default: begin
+                        line1_text_next = lcd_str("??? ???");
                     end
                 endcase
                 
-                // Line 2: "Start? Cancel?"
-                line2_text_next = {"S", "t", "a", "r", "t", "?", " ", "C",
-                                 "a", "n", "c", "e", "l", "?", " ", " "};
+                // Line 2: Confirmation prompt
+                line2_text_next = lcd_str("Start? Cancel?");
             end
             
             //================================================================
             // BREWING
             //================================================================
             STATE_BREWING: begin
-                // Line 1: "Brewing..."
-                line1_text_next = {"B", "r", "e", "w", "i", "n", "g", ".",
-                                 ".", ".", " ", " ", " ", " ", " ", " "};
+                line1_text_next = lcd_str("Brewing...");
                 
-                // Line 2: Progress bar
+                // Line 2: Progress bar (needs special handling)
                 line2_text_next = {progress_bar[0], progress_bar[1], progress_bar[2], progress_bar[3],
                                  progress_bar[4], progress_bar[5], progress_bar[6], progress_bar[7],
                                  progress_bar[8], progress_bar[9], progress_bar[10], progress_bar[11],
@@ -356,26 +339,16 @@ module message_manager (
             // COMPLETE
             //================================================================
             STATE_COMPLETE: begin
-                // Line 1: "Enjoy!"
-                line1_text_next = {"E", "n", "j", "o", "y", "!", " ", " ",
-                                 " ", " ", " ", " ", " ", " ", " ", " "};
-                
-                // Line 2: "Press any key"
-                line2_text_next = {"P", "r", "e", "s", "s", " ", "a", "n",
-                                 "y", " ", "k", "e", "y", " ", " ", " "};
+                line1_text_next = lcd_str("Enjoy!");
+                line2_text_next = lcd_str("Press any key");
             end
             
             //================================================================
             // SETTINGS
             //================================================================
             STATE_SETTINGS: begin
-                // Line 1: "Settings Mode"
-                line1_text_next = {"S", "e", "t", "t", "i", "n", "g", "s",
-                                 " ", "M", "o", "d", "e", " ", " ", " "};
-                
-                // Line 2: "Cancel to exit"
-                line2_text_next = {"C", "a", "n", "c", "e", "l", " ", "t",
-                                 "o", " ", "e", "x", "i", "t", " ", " "};
+                line1_text_next = lcd_str("Settings Mode");
+                line2_text_next = lcd_str("Cancel to exit");
             end
             
             //================================================================
@@ -384,34 +357,27 @@ module message_manager (
             STATE_ERROR: begin
                 // Line 1: Error type
                 if (!temp_ready) begin
-                    line1_text_next = {"W", "A", "T", "E", "R", " ", "T", "E",
-                                     "M", "P", "!", " ", " ", " ", " ", " "};
+                    line1_text_next = lcd_str("WATER TEMP!");
                 end else if (!pressure_ready) begin
-                    line1_text_next = {"W", "A", "T", "E", "R", " ", "E", "R",
-                                     "R", "O", "R", "!", " ", " ", " ", " "};
+                    line1_text_next = lcd_str("WATER ERROR!");
                 end else if (paper_empty) begin
-                    line1_text_next = {"N", "O", " ", "P", "A", "P", "E", "R",
-                                     "!", " ", " ", " ", " ", " ", " ", " "};
+                    line1_text_next = lcd_str("NO PAPER!");
                 end else if (bin0_empty && bin1_empty) begin
-                    line1_text_next = {"N", "O", " ", "C", "O", "F", "F", "E",
-                                     "E", "!", " ", " ", " ", " ", " ", " "};
+                    line1_text_next = lcd_str("NO COFFEE!");
                 end else begin
-                    line1_text_next = {"S", "Y", "S", "T", "E", "M", " ", "F",
-                                     "A", "U", "L", "T", "!", " ", " ", " "};
+                    line1_text_next = lcd_str("SYSTEM FAULT!");
                 end
                 
-                // Line 2: "Fix and restart"
-                line2_text_next = {"F", "i", "x", " ", "&", " ", "r", "e",
-                                 "s", "t", "a", "r", "t", " ", " ", " "};
+                // Line 2: Instruction
+                line2_text_next = lcd_str("Fix & restart");
             end
             
             //================================================================
             // DEFAULT
             //================================================================
             default: begin
-                line1_text_next = {"E", "R", "R", "O", "R", " ", " ", " ",
-                                 " ", " ", " ", " ", " ", " ", " ", " "};
-                line2_text_next = {16{SPACE}};
+                line1_text_next = lcd_str("ERROR");
+                line2_text_next = lcd_str("");
             end
             
         endcase
@@ -423,8 +389,8 @@ module message_manager (
     
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            line1_text <= {16{SPACE}};
-            line2_text <= {16{SPACE}};
+            line1_text <= lcd_str("");
+            line2_text <= lcd_str("");
             prev_menu_state <= STATE_SPLASH;
             message_updated <= 1'b0;
         end else begin
@@ -439,16 +405,19 @@ module message_manager (
     end
     
     //========================================================================
-    // Debug/Monitoring (Optional - removed during synthesis)
+    // Debug/Monitoring (Optional - synthesis directives handle sim vs synth)
     //========================================================================
     
-    // Synthesis translate_off
-    // function [8*16-1:0] ascii_to_string;
+    // synthesis translate_off
+    // function string ascii_to_string;
     //     input [127:0] ascii_data;
     //     integer i;
+    //     byte c;
     //     begin
+    //         ascii_to_string = "";
     //         for (i = 0; i < 16; i = i + 1) begin
-    //             ascii_to_string[8*i +: 8] = ascii_data[8*i +: 8];
+    //             c = ascii_data[127-(i*8) -: 8];
+    //             ascii_to_string = {ascii_to_string, string'(c)};
     //         end
     //     end
     // endfunction
@@ -460,6 +429,6 @@ module message_manager (
     //         $display("  Line 2: %s", ascii_to_string(line2_text));
     //     end
     // end
-    // Synthesis translate_on
+    // synthesis translate_on
     
 endmodule

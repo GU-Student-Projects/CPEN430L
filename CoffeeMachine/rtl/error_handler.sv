@@ -4,12 +4,6 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
-//
-// FIXES APPLIED:
-// - Fixed error/warning counter logic (moved to combinational)
-// - Removed unused error_history register
-// - Proper use of blocking assignments in combinational logic
-// - Added error counting function for clarity
 //============================================================================
 
 `timescale 1ns/1ps
@@ -212,14 +206,14 @@ module error_handler (
     
     //========================================================================
     // General Error Flag (Registered)
+    // FIX: Temperature and pressure faults removed - they're warnings only
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             error_present <= 1'b0;
         end else begin
-            error_present <= err_no_water || err_no_paper || err_no_coffee || 
-                           err_temp_fault || err_pressure_fault || err_system_fault;
+            error_present <= err_no_water || err_no_paper || err_no_coffee || err_system_fault;
         end
     end
     
@@ -236,14 +230,14 @@ module error_handler (
         end
     endfunction
     
-    // Combinational error counting
+    // Combinational error counting - only real errors
     always @(*) begin
         error_count = count_active_errors(
             err_no_water,
             err_no_paper,
             err_no_coffee,
-            err_temp_fault,
-            err_pressure_fault,
+            1'b0,                // FIX: Not counting temp_fault as error
+            1'b0,                // FIX: Not counting pressure_fault as error
             err_system_fault
         );
     end
