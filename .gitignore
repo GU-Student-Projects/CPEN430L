@@ -1,69 +1,130 @@
-# Prerequisites
-*.d
+# ============================================================================
+# Coffee Machine FPGA Project - Git Ignore File
+# ============================================================================
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# ModelSim Simulation Files
+# ============================================================================
+work/
+*.vstf
+*.wlf
+transcript
+vsim.wlf
+*.bak
+*.log
+*.history
+*.qdb
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# Waveform and Debug Files
+# ============================================================================
+*.vcd
+*.saif
+*.fsm
+*.gtkw
 
-# Precompiled Headers
-*.gch
-*.pch
+# Quartus Project Files (if using Quartus for synthesis)
+# ============================================================================
+db/
+incremental_db/
+output_files/
+simulation/
+*.qpf
+*.qsf
+*.qws
+*.rpt
+*.summary
+*.done
+*.smsg
+*.sld
+*.qarlog
+*.jdi
+*.pin
+*.sof
+*.pof
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# Timing Analysis
+# ============================================================================
+*.tan.rpt
+*.tan.summary
 
-# Shared objects (inc. Windows DLLs)
-*.dll
+# Compilation Results
+# ============================================================================
+*.qdf
+*.bak
+*.mif
+*.hex
+
+# Temporary Build Files
+# ============================================================================
+*.tmp
+*~
+*.swp
+*.swo
+
+# OS Generated Files
+# ============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE and Editor Files
+# ============================================================================
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Python (if using cocotb or other Python verification)
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
 *.so
-*.so.*
-*.dylib
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Executables
+# C/C++ (if using DPI or C testbenches)
+# ============================================================================
+*.o
+*.obj
+*.so
+*.dll
 *.exe
 *.out
 *.app
-*.i*86
-*.x86_64
-*.hex
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# Documentation Build Files
+# ============================================================================
+*.aux
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Backup and Temporary Files
+# ============================================================================
+*_backup/
+backup/
+*.orig
 
-# debug information files
-*.dwo
-
-db/
-output_files/
-incremental_db/
-work/
-*.lst
-*.mti
-*.mpf
-*.qws
-*.bak
-*.wlf
-*.qpf
-*.vvp
-*.vcd
+# Project Specific
+# ============================================================================
+# Add any project-specific files or directories here
