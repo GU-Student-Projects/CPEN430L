@@ -121,14 +121,14 @@ module message_manager (
     endfunction
     
     //========================================================================
-    // Helper Function: Convert number to ASCII
+    // Helper Function: Convert number to ASCII character
     //========================================================================
     
-    function [7:0] num_to_ascii;
-        input [7:0] num;
+    function automatic [7:0] num_to_ascii;
+        input integer num;
         begin
-            if (num < 10)
-                num_to_ascii = 8'h30 + num;  // '0' + num
+            if (num >= 0 && num <= 9)
+                num_to_ascii = 8'h30 + num[7:0];  // '0' + num
             else
                 num_to_ascii = 8'h20;  // Space if out of range
         end
@@ -174,7 +174,10 @@ module message_manager (
                 
                 // Show warning count or "Ready"
                 if (warning_count > 0) begin
-                    line2_text_next = lcd_str($sformatf("Warnings: %0d", warning_count));
+                    // Manually construct "Warnings: X" string
+                    line2_text_next = {"W", "a", "r", "n", "i", "n", "g", "s", 
+                                     ":", " ", num_to_ascii(warning_count), " ", 
+                                     " ", " ", " ", " "};
                 end else begin
                     line2_text_next = lcd_str("Ready");
                 end
@@ -405,10 +408,12 @@ module message_manager (
     end
     
     //========================================================================
-    // Debug/Monitoring (Optional - synthesis directives handle sim vs synth)
+    // Debug/Monitoring (Commented out - can cause simulation issues)
     //========================================================================
     
     // synthesis translate_off
+    // Debug display - uncomment if needed and your simulator supports it
+    // 
     // function string ascii_to_string;
     //     input [127:0] ascii_data;
     //     integer i;
@@ -421,7 +426,7 @@ module message_manager (
     //         end
     //     end
     // endfunction
-    
+    // 
     // always @(posedge clk) begin
     //     if (message_updated) begin
     //         $display("[%0t] LCD Update:", $time);
