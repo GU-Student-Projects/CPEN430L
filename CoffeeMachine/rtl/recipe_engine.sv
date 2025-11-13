@@ -5,6 +5,7 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
+//
 //============================================================================
 
 `timescale 1ns/1ps
@@ -102,11 +103,20 @@ module recipe_engine (
     parameter SIZE_12OZ_MULT = 8'd10;   // 1.0x
     parameter SIZE_16OZ_MULT = 8'd13;   // 1.3x
     
-    // Timing parameters (in milliseconds converted to clock cycles)
-    parameter TIME_GRIND = 32'd100_000_000;     // 2 seconds grinding
-    parameter TIME_POUR = 32'd150_000_000;      // 3 seconds pouring
-    parameter TIME_PAPER_FEED = 32'd25_000_000; // 0.5 seconds paper feed
-    parameter TIME_SETTLE = 32'd25_000_000;     // 0.5 seconds settling
+    // Timing parameters (in clock cycles at 50MHz)
+    `ifdef SIMULATION
+        // Fast simulation times
+        parameter TIME_GRIND = 32'd100_000;         // 2ms in simulation
+        parameter TIME_POUR = 32'd150_000;          // 3ms in simulation
+        parameter TIME_PAPER_FEED = 32'd25_000;     // 0.5ms in simulation
+        parameter TIME_SETTLE = 32'd25_000;         // 0.5ms in simulation
+    `else
+        // Real hardware times
+        parameter TIME_GRIND = 32'd100_000_000;     // 2 seconds grinding
+        parameter TIME_POUR = 32'd150_000_000;      // 3 seconds pouring
+        parameter TIME_PAPER_FEED = 32'd25_000_000; // 0.5 seconds paper feed
+        parameter TIME_SETTLE = 32'd25_000_000;     // 0.5 seconds settling
+    `endif
     
     //========================================================================
     // Recipe Storage (ROM-like structure)
@@ -176,19 +186,19 @@ module recipe_engine (
     } brew_state_t;
     
     brew_state_t brew_state, next_brew_state;
+    brew_state_t prev_brew_state;
     
     // Timing counters
     reg [31:0] brew_timer;
     reg [31:0] brew_timer_target;
+    reg [31:0] total_brew_time;
+    reg [31:0] elapsed_brew_time;
     
     // Recipe validation flags
     reg recipe_has_enough_coffee;
     reg recipe_has_enough_creamer;
     reg recipe_has_enough_chocolate;
     reg recipe_has_paper;
-    
-    // Consumption tracking
-    reg ingredients_consumed;
     
     //========================================================================
     // Recipe Scaling (Size Adjustment)
@@ -250,6 +260,25 @@ module recipe_engine (
                          recipe_has_paper;
     
     //========================================================================
+    // Total Brew Time Calculation (for progress)
+    //========================================================================
+    
+    always @(*) begin
+        // Calculate total time based on recipe requirements
+        total_brew_time = TIME_PAPER_FEED + TIME_SETTLE;  // Always need paper and settle
+        
+        if (scaled_coffee > 0) begin
+            total_brew_time = total_brew_time + TIME_GRIND + TIME_POUR;
+        end else begin
+            total_brew_time = total_brew_time + TIME_POUR;  // Still pour even without coffee
+        end
+        
+        if (scaled_creamer > 0 || scaled_chocolate > 0) begin
+            total_brew_time = total_brew_time + (TIME_POUR / 2);  // Dispensing time
+        end
+    end
+    
+    //========================================================================
     // Brewing State Machine
     //========================================================================
     
@@ -257,7 +286,9 @@ module recipe_engine (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             brew_state <= IDLE;
+            prev_brew_state <= IDLE;
         end else begin
+            prev_brew_state <= brew_state;
             brew_state <= next_brew_state;
         end
     end
@@ -345,11 +376,27 @@ module recipe_engine (
         end else begin
             if (brew_state == IDLE || brew_state == VALIDATE || brew_state == COMPLETE || brew_state == ABORT) begin
                 brew_timer <= 0;
-            end else if (brew_state != next_brew_state) begin
+            end else if (brew_state != prev_brew_state) begin
                 // State transition - reset timer
                 brew_timer <= 0;
             end else begin
                 brew_timer <= brew_timer + 1;
+            end
+        end
+    end
+    
+    //========================================================================
+    // Elapsed Time Tracking (for smooth progress)
+    //========================================================================
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            elapsed_brew_time <= 0;
+        end else begin
+            if (brew_state == IDLE || brew_state == VALIDATE || brew_state == ABORT) begin
+                elapsed_brew_time <= 0;
+            end else if (brewing_active) begin
+                elapsed_brew_time <= elapsed_brew_time + 1;
             end
         end
     end
@@ -382,10 +429,8 @@ module recipe_engine (
             
             // Internal tracking
             brew_timer_target <= 0;
-            ingredients_consumed <= 1'b0;
             
         end else begin
-            // Default: turn off all actuators and consumption
             grinder0_enable <= 1'b0;
             grinder1_enable <= 1'b0;
             water_pour_enable <= 1'b0;
@@ -394,11 +439,16 @@ module recipe_engine (
             consume_enable <= 1'b0;
             brewing_complete <= 1'b0;
             
+            consume_bin0_amount <= 8'd0;
+            consume_bin1_amount <= 8'd0;
+            consume_creamer_amount <= 8'd0;
+            consume_chocolate_amount <= 8'd0;
+            consume_paper_filter <= 1'b0;
+            
             case (brew_state)
                 IDLE: begin
                     brewing_active <= 1'b0;
                     brew_progress <= 8'd0;
-                    ingredients_consumed <= 1'b0;
                 end
                 
                 VALIDATE: begin
@@ -408,71 +458,99 @@ module recipe_engine (
                 
                 FEED_PAPER: begin
                     brewing_active <= 1'b1;
-                    brew_progress <= 8'd10;
                     paper_motor_enable <= 1'b1;
                     brew_timer_target <= TIME_PAPER_FEED;
                     
-                    // Consume paper filter (once)
-                    if (!ingredients_consumed) begin
+                    if (prev_brew_state != FEED_PAPER) begin
                         consume_enable <= 1'b1;
                         consume_paper_filter <= 1'b1;
-                        ingredients_consumed <= 1'b1;
+                    end
+                    
+                    // Smooth progress calculation
+                    if (total_brew_time > 0) begin
+                        brew_progress <= (elapsed_brew_time * 100) / total_brew_time;
+                    end else begin
+                        brew_progress <= 8'd10;
                     end
                 end
                 
                 GRINDING: begin
                     brewing_active <= 1'b1;
-                    brew_progress <= 8'd30;
                     brew_timer_target <= TIME_GRIND;
+                    
+                    // FIX: Consume coffee ONLY on state entry
+                    if (prev_brew_state != GRINDING) begin
+                        consume_enable <= 1'b1;
+                        if (selected_coffee_type == COFFEE_BIN0) begin
+                            consume_bin0_amount <= scaled_coffee;
+                        end else begin
+                            consume_bin1_amount <= scaled_coffee;
+                        end
+                    end
                     
                     // Activate appropriate grinder
                     if (selected_coffee_type == COFFEE_BIN0) begin
                         grinder0_enable <= 1'b1;
-                        
-                        // Consume coffee (once per state entry)
-                        if (brew_state != next_brew_state || !ingredients_consumed) begin
-                            consume_enable <= 1'b1;
-                            consume_bin0_amount <= scaled_coffee;
-                        end
                     end else begin
                         grinder1_enable <= 1'b1;
-                        
-                        if (brew_state != next_brew_state || !ingredients_consumed) begin
-                            consume_enable <= 1'b1;
-                            consume_bin1_amount <= scaled_coffee;
-                        end
+                    end
+                    
+                    // Smooth progress
+                    if (total_brew_time > 0) begin
+                        brew_progress <= (elapsed_brew_time * 100) / total_brew_time;
+                    end else begin
+                        brew_progress <= 8'd30;
                     end
                 end
                 
                 POURING: begin
                     brewing_active <= 1'b1;
-                    brew_progress <= 8'd60;
                     brew_timer_target <= TIME_POUR;
                     water_pour_enable <= 1'b1;
+                    
+                    // Smooth progress
+                    if (total_brew_time > 0) begin
+                        brew_progress <= (elapsed_brew_time * 100) / total_brew_time;
+                    end else begin
+                        brew_progress <= 8'd60;
+                    end
                 end
                 
                 DISPENSING: begin
                     brewing_active <= 1'b1;
-                    brew_progress <= 8'd80;
                     brew_timer_target <= TIME_POUR / 2;
                     
-                    // Dispense creamer and chocolate
-                    if (scaled_creamer > 0 || scaled_chocolate > 0) begin
-                        water_direct_enable <= 1'b1;
-                        
-                        // Consume additives (once)
-                        if (brew_state != next_brew_state || !ingredients_consumed) begin
+                    if (prev_brew_state != DISPENSING) begin
+                        if (scaled_creamer > 0 || scaled_chocolate > 0) begin
                             consume_enable <= 1'b1;
                             consume_creamer_amount <= scaled_creamer;
                             consume_chocolate_amount <= scaled_chocolate;
                         end
                     end
+                    
+                    // Dispense creamer and chocolate if needed
+                    if (scaled_creamer > 0 || scaled_chocolate > 0) begin
+                        water_direct_enable <= 1'b1;
+                    end
+                    
+                    // Smooth progress
+                    if (total_brew_time > 0) begin
+                        brew_progress <= (elapsed_brew_time * 100) / total_brew_time;
+                    end else begin
+                        brew_progress <= 8'd80;
+                    end
                 end
                 
                 SETTLING: begin
                     brewing_active <= 1'b1;
-                    brew_progress <= 8'd95;
                     brew_timer_target <= TIME_SETTLE;
+                    
+                    // Smooth progress
+                    if (total_brew_time > 0) begin
+                        brew_progress <= (elapsed_brew_time * 100) / total_brew_time;
+                    end else begin
+                        brew_progress <= 8'd95;
+                    end
                 end
                 
                 COMPLETE: begin
@@ -495,28 +573,35 @@ module recipe_engine (
     //========================================================================
     
     // Synthesis translate_off
-    always @(posedge clk) begin
-        // Log state transitions
-        if (brew_state != next_brew_state) begin
-            case (next_brew_state)
-                IDLE: $display("[%0t] Recipe Engine: IDLE", $time);
-                VALIDATE: $display("[%0t] Recipe Engine: VALIDATE", $time);
-                FEED_PAPER: $display("[%0t] Recipe Engine: FEED_PAPER", $time);
-                GRINDING: $display("[%0t] Recipe Engine: GRINDING", $time);
-                POURING: $display("[%0t] Recipe Engine: POURING", $time);
-                DISPENSING: $display("[%0t] Recipe Engine: DISPENSING", $time);
-                SETTLING: $display("[%0t] Recipe Engine: SETTLING", $time);
-                COMPLETE: $display("[%0t] Recipe Engine: COMPLETE", $time);
-                ABORT: $display("[%0t] Recipe Engine: ABORT", $time);
-            endcase
-        end
+    // always @(posedge clk) begin
+    //     // Log state transitions
+    //     if (brew_state != prev_brew_state) begin
+    //         case (brew_state)
+    //             IDLE: $display("[%0t] Recipe Engine: IDLE", $time);
+    //             VALIDATE: $display("[%0t] Recipe Engine: VALIDATE", $time);
+    //             FEED_PAPER: $display("[%0t] Recipe Engine: FEED_PAPER", $time);
+    //             GRINDING: $display("[%0t] Recipe Engine: GRINDING", $time);
+    //             POURING: $display("[%0t] Recipe Engine: POURING", $time);
+    //             DISPENSING: $display("[%0t] Recipe Engine: DISPENSING", $time);
+    //             SETTLING: $display("[%0t] Recipe Engine: SETTLING", $time);
+    //             COMPLETE: $display("[%0t] Recipe Engine: COMPLETE", $time);
+    //             ABORT: $display("[%0t] Recipe Engine: ABORT", $time);
+    //         endcase
+    //     end
         
-        // Log recipe selection
-        if (brew_state == VALIDATE) begin
-            $display("[%0t] Recipe: Type=%0d, Size=%0d, Coffee=%0d units, Creamer=%0d, Chocolate=%0d",
-                     $time, selected_drink_type, selected_size, scaled_coffee, scaled_creamer, scaled_chocolate);
-        end
-    end
+    //     // Log consumption events (only on state entry)
+    //     if (consume_enable) begin
+    //         $display("[%0t] Recipe Engine: Consuming - Coffee B0:%0d, B1:%0d, Creamer:%0d, Chocolate:%0d, Paper:%b",
+    //                  $time, consume_bin0_amount, consume_bin1_amount, 
+    //                  consume_creamer_amount, consume_chocolate_amount, consume_paper_filter);
+    //     end
+        
+    //     // Log recipe selection
+    //     if (brew_state == VALIDATE && prev_brew_state != VALIDATE) begin
+    //         $display("[%0t] Recipe: Type=%0d, Size=%0d, Coffee=%0d units, Creamer=%0d, Chocolate=%0d",
+    //                  $time, selected_drink_type, selected_size, scaled_coffee, scaled_creamer, scaled_chocolate);
+    //     end
+    // end
     // Synthesis translate_on
     
 endmodule

@@ -443,23 +443,23 @@ module message_manager (
     //========================================================================
     
     // Synthesis translate_off
-    function [8*16-1:0] ascii_to_string;
-        input [127:0] ascii_data;
-        integer i;
-        begin
-            for (i = 0; i < 16; i = i + 1) begin
-                ascii_to_string[8*i +: 8] = ascii_data[8*i +: 8];
-            end
-        end
-    endfunction
+    // function [8*16-1:0] ascii_to_string;
+    //     input [127:0] ascii_data;
+    //     integer i;
+    //     begin
+    //         for (i = 0; i < 16; i = i + 1) begin
+    //             ascii_to_string[8*i +: 8] = ascii_data[8*i +: 8];
+    //         end
+    //     end
+    // endfunction
     
-    always @(posedge clk) begin
-        if (message_updated) begin
-            $display("[%0t] LCD Update:", $time);
-            $display("  Line 1: %s", ascii_to_string(line1_text));
-            $display("  Line 2: %s", ascii_to_string(line2_text));
-        end
-    end
+    // always @(posedge clk) begin
+    //     if (message_updated) begin
+    //         $display("[%0t] LCD Update:", $time);
+    //         $display("  Line 1: %s", ascii_to_string(line1_text));
+    //         $display("  Line 2: %s", ascii_to_string(line2_text));
+    //     end
+    // end
     // Synthesis translate_on
     
 endmodule

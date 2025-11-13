@@ -79,219 +79,197 @@ module consumable_manager (
     parameter PAPER_LOW_THRESHOLD = 5;
     parameter PAPER_MAX = 255;
     
+    // Startup stabilization time
+    parameter STARTUP_CYCLES = 32'd100_000;  // 2ms at 50MHz for sensors to stabilize
+    
     //========================================================================
     // Internal Registers
     //========================================================================
     
-    // Consumption state machine
-    typedef enum logic [1:0] {
-        IDLE,
-        CONSUMING,
-        DONE
-    } consume_state_t;
-    
-    consume_state_t consume_state;
+    // Startup counter to ignore sensor glitches
+    reg [31:0] startup_counter;
+    reg        startup_complete;
     
     //========================================================================
-    // Level Management Logic
+    // Startup Stabilization
     //========================================================================
     
-    // Coffee Bin 0 level management
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            startup_counter <= 0;
+            startup_complete <= 1'b0;
+        end else begin
+            if (startup_counter >= STARTUP_CYCLES) begin
+                startup_complete <= 1'b1;
+            end else begin
+                startup_counter <= startup_counter + 1;
+            end
+        end
+    end
+    
+    //========================================================================
+    // Level Management Logic - Coffee Bin 0
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             coffee_bin0_level <= LEVEL_FULL;
-            consume_state <= IDLE;
         end else begin
-            // Check if sensor is forcing empty
-            if (sensor_bin0_level == 0) begin
-                coffee_bin0_level <= 0;
-            // Allow consumption
-            end else if (consume_enable && consume_bin0_amount > 0) begin
+            // Consumption has priority
+            if (consume_enable && consume_bin0_amount > 0) begin
                 if (coffee_bin0_level >= consume_bin0_amount) begin
                     coffee_bin0_level <= coffee_bin0_level - consume_bin0_amount;
                 end else begin
                     coffee_bin0_level <= 0;
                 end
-            // Update from sensor only if sensor changed AND no consumption happening
-            end else if (!consume_enable && sensor_bin0_level != coffee_bin0_level && sensor_bin0_level != 0) begin
+            // FIX: Only update from sensor after startup AND when not consuming
+            end else if (startup_complete && !consume_enable) begin
                 coffee_bin0_level <= sensor_bin0_level;
             end
         end
     end
     
-    // Coffee Bin 1 level management
+    //========================================================================
+    // Level Management Logic - Coffee Bin 1
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             coffee_bin1_level <= LEVEL_FULL;
         end else begin
-            if (sensor_bin1_level == 0) begin
-                coffee_bin1_level <= 0;
-            end else if (consume_enable && consume_bin1_amount > 0) begin
+            if (consume_enable && consume_bin1_amount > 0) begin
                 if (coffee_bin1_level >= consume_bin1_amount) begin
                     coffee_bin1_level <= coffee_bin1_level - consume_bin1_amount;
                 end else begin
                     coffee_bin1_level <= 0;
                 end
-            end else if (!consume_enable && sensor_bin1_level != coffee_bin1_level && sensor_bin1_level != 0) begin
+            end else if (startup_complete && !consume_enable) begin
                 coffee_bin1_level <= sensor_bin1_level;
             end
         end
     end
     
-    // Creamer level management
+    //========================================================================
+    // Level Management Logic - Creamer
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             creamer_level <= LEVEL_FULL;
         end else begin
-            if (sensor_creamer_level == 0) begin
-                creamer_level <= 0;
-            end else if (consume_enable && consume_creamer_amount > 0) begin
+            if (consume_enable && consume_creamer_amount > 0) begin
                 if (creamer_level >= consume_creamer_amount) begin
                     creamer_level <= creamer_level - consume_creamer_amount;
                 end else begin
                     creamer_level <= 0;
                 end
-            end else if (!consume_enable && sensor_creamer_level != creamer_level && sensor_creamer_level != 0) begin
+            end else if (startup_complete && !consume_enable) begin
                 creamer_level <= sensor_creamer_level;
             end
         end
     end
     
-    // Chocolate level management
+    //========================================================================
+    // Level Management Logic - Chocolate
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             chocolate_level <= LEVEL_FULL;
         end else begin
-            if (sensor_chocolate_level == 0) begin
-                chocolate_level <= 0;
-            end else if (consume_enable && consume_chocolate_amount > 0) begin
+            if (consume_enable && consume_chocolate_amount > 0) begin
                 if (chocolate_level >= consume_chocolate_amount) begin
                     chocolate_level <= chocolate_level - consume_chocolate_amount;
                 end else begin
                     chocolate_level <= 0;
                 end
-            end else if (!consume_enable && sensor_chocolate_level != chocolate_level && sensor_chocolate_level != 0) begin
+            end else if (startup_complete && !consume_enable) begin
                 chocolate_level <= sensor_chocolate_level;
             end
         end
     end
     
-    // Paper filter count management
+    //========================================================================
+    // Level Management Logic - Paper Filter
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             paper_filter_count <= PAPER_MAX;
         end else begin
-            // Refill when sensor shows paper present after being absent
-            if (paper_filter_present && paper_filter_count == 0) begin
-                paper_filter_count <= PAPER_MAX; // Refill to max
-            end else if (consume_enable && consume_paper_filter) begin
-                // Consume one paper filter
+            if (consume_enable && consume_paper_filter) begin
                 if (paper_filter_count > 0) begin
                     paper_filter_count <= paper_filter_count - 1;
+                end
+            end else if (startup_complete && !consume_enable) begin
+                // Update paper count from sensor
+                if (paper_filter_present) begin
+                    // If sensor sees paper and count is low, assume refill
+                    if (paper_filter_count < PAPER_LOW_THRESHOLD) begin
+                        paper_filter_count <= PAPER_MAX;
+                    end
+                end else begin
+                    // If sensor says no paper, set to 0
+                    paper_filter_count <= 0;
                 end
             end
         end
     end
     
     //========================================================================
-    // Status Flag Generation (Combinational)
+    // Status Flag Generation
     //========================================================================
     
-    // Coffee Bin 0 status
     assign bin0_empty = (coffee_bin0_level <= LEVEL_EMPTY_THRESHOLD);
-    assign bin0_low = (coffee_bin0_level > LEVEL_EMPTY_THRESHOLD) && 
-                      (coffee_bin0_level <= LEVEL_LOW_THRESHOLD);
+    assign bin0_low = (coffee_bin0_level <= LEVEL_LOW_THRESHOLD) && !bin0_empty;
     
-    // Coffee Bin 1 status
     assign bin1_empty = (coffee_bin1_level <= LEVEL_EMPTY_THRESHOLD);
-    assign bin1_low = (coffee_bin1_level > LEVEL_EMPTY_THRESHOLD) && 
-                      (coffee_bin1_level <= LEVEL_LOW_THRESHOLD);
+    assign bin1_low = (coffee_bin1_level <= LEVEL_LOW_THRESHOLD) && !bin1_empty;
     
-    // Creamer status
     assign creamer_empty = (creamer_level <= LEVEL_EMPTY_THRESHOLD);
-    assign creamer_low = (creamer_level > LEVEL_EMPTY_THRESHOLD) && 
-                         (creamer_level <= LEVEL_LOW_THRESHOLD);
+    assign creamer_low = (creamer_level <= LEVEL_LOW_THRESHOLD) && !creamer_empty;
     
-    // Chocolate status
     assign chocolate_empty = (chocolate_level <= LEVEL_EMPTY_THRESHOLD);
-    assign chocolate_low = (chocolate_level > LEVEL_EMPTY_THRESHOLD) && 
-                           (chocolate_level <= LEVEL_LOW_THRESHOLD);
+    assign chocolate_low = (chocolate_level <= LEVEL_LOW_THRESHOLD) && !chocolate_empty;
     
-    // Paper filter status
     assign paper_empty = (paper_filter_count == 0);
-    assign paper_low = (paper_filter_count > 0) && 
-                       (paper_filter_count <= PAPER_LOW_THRESHOLD);
+    assign paper_low = (paper_filter_count <= PAPER_LOW_THRESHOLD) && !paper_empty;
     
     //========================================================================
-    // Availability Flag Generation (Combinational)
+    // Availability Flag Generation
     //========================================================================
     
-    // Can make coffee if at least one bin is not empty
     assign can_make_coffee = !bin0_empty || !bin1_empty;
-    
-    // Can add creamer if creamer is not empty
     assign can_add_creamer = !creamer_empty;
-    
-    // Can add chocolate if chocolate is not empty
     assign can_add_chocolate = !chocolate_empty;
     
     //========================================================================
-    // Debug/Monitoring (Optional - can be removed for synthesis)
+    // Debug/Monitoring (Optional - removed during synthesis)
     //========================================================================
     
     // Synthesis translate_off
     // always @(posedge clk) begin
+    //     // Log startup completion
+    //     if (startup_counter == STARTUP_CYCLES) begin
+    //         $display("[%0t] Consumable Manager: Startup stabilization complete", $time);
+    //         $display("[%0t]   Bin0: %0d, Bin1: %0d, Creamer: %0d, Chocolate: %0d, Paper: %0d",
+    //                  $time, coffee_bin0_level, coffee_bin1_level, creamer_level, 
+    //                  chocolate_level, paper_filter_count);
+    //     end
+        
+    //     // Log consumption events
     //     if (consume_enable) begin
-    //         if (consume_bin0_amount > 0) begin
-    //             $display("[%0t] Consuming %0d units from Bin 0 (level: %0d)", 
-    //                      $time, consume_bin0_amount, coffee_bin0_level);
-    //         end
-    //         if (consume_bin1_amount > 0) begin
-    //             $display("[%0t] Consuming %0d units from Bin 1 (level: %0d)", 
-    //                      $time, consume_bin1_amount, coffee_bin1_level);
-    //         end
-    //         if (consume_creamer_amount > 0) begin
-    //             $display("[%0t] Consuming %0d units of creamer (level: %0d)", 
-    //                      $time, consume_creamer_amount, creamer_level);
-    //         end
-    //         if (consume_chocolate_amount > 0) begin
-    //             $display("[%0t] Consuming %0d units of chocolate (level: %0d)", 
-    //                      $time, consume_chocolate_amount, chocolate_level);
-    //         end
-    //         if (consume_paper_filter) begin
-    //             $display("[%0t] Consuming paper filter (count: %0d)", 
-    //                      $time, paper_filter_count);
-    //         end
+    //         $display("[%0t] Consumable Manager: Consuming - Bin0:%0d Bin1:%0d Creamer:%0d Chocolate:%0d Paper:%b",
+    //                  $time, consume_bin0_amount, consume_bin1_amount, 
+    //                  consume_creamer_amount, consume_chocolate_amount, consume_paper_filter);
     //     end
         
-    //     // Warning messages for low levels
-    //     if (bin0_low && !bin0_empty) begin
-    //         $display("[%0t] WARNING: Coffee Bin 0 is low (level: %0d)", 
-    //                  $time, coffee_bin0_level);
-    //     end
-    //     if (bin1_low && !bin1_empty) begin
-    //         $display("[%0t] WARNING: Coffee Bin 1 is low (level: %0d)", 
-    //                  $time, coffee_bin1_level);
-    //     end
-    //     if (creamer_low && !creamer_empty) begin
-    //         $display("[%0t] WARNING: Creamer is low (level: %0d)", 
-    //                  $time, creamer_level);
-    //     end
-    //     if (chocolate_low && !chocolate_empty) begin
-    //         $display("[%0t] WARNING: Chocolate is low (level: %0d)", 
-    //                  $time, chocolate_level);
-    //     end
-    //     if (paper_low && !paper_empty) begin
-    //         $display("[%0t] WARNING: Paper filters are low (count: %0d)", 
-    //                  $time, paper_filter_count);
-    //     end
-        
-    //     // Error messages for empty levels
-    //     if (bin0_empty && bin1_empty) begin
-    //         $display("[%0t] ERROR: All coffee bins are empty!", $time);
-    //     end
-    //     if (paper_empty) begin
-    //         $display("[%0t] ERROR: No paper filters available!", $time);
+    //     // Log level updates from sensors (only after startup)
+    //     if (startup_complete && !consume_enable) begin
+    //         if (coffee_bin0_level != sensor_bin0_level) begin
+    //             $display("[%0t] Consumable Manager: Bin0 updated from sensor: %0d -> %0d",
+    //                      $time, coffee_bin0_level, sensor_bin0_level);
+    //         end
     //     end
     // end
     // Synthesis translate_on

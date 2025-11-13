@@ -503,45 +503,45 @@ module menu_navigator (
     //========================================================================
     
     // Synthesis translate_off
-    always @(posedge clk) begin
-        // Log state transitions
-        if (state_changed) begin
-            case (next_menu_state)
-                STATE_SPLASH: $display("[%0t] Menu: SPLASH", $time);
-                STATE_CHECK_ERRORS: $display("[%0t] Menu: CHECK_ERRORS", $time);
-                STATE_COFFEE_SELECT: $display("[%0t] Menu: COFFEE_SELECT", $time);
-                STATE_DRINK_SELECT: $display("[%0t] Menu: DRINK_SELECT", $time);
-                STATE_SIZE_SELECT: $display("[%0t] Menu: SIZE_SELECT", $time);
-                STATE_CONFIRM: $display("[%0t] Menu: CONFIRM", $time);
-                STATE_BREWING: $display("[%0t] Menu: BREWING", $time);
-                STATE_COMPLETE: $display("[%0t] Menu: COMPLETE", $time);
-                STATE_SETTINGS: $display("[%0t] Menu: SETTINGS", $time);
-                STATE_ERROR: $display("[%0t] Menu: ERROR", $time);
-            endcase
-        end
+    // always @(posedge clk) begin
+    //     // Log state transitions
+    //     if (state_changed) begin
+    //         case (next_menu_state)
+    //             STATE_SPLASH: $display("[%0t] Menu: SPLASH", $time);
+    //             STATE_CHECK_ERRORS: $display("[%0t] Menu: CHECK_ERRORS", $time);
+    //             STATE_COFFEE_SELECT: $display("[%0t] Menu: COFFEE_SELECT", $time);
+    //             STATE_DRINK_SELECT: $display("[%0t] Menu: DRINK_SELECT", $time);
+    //             STATE_SIZE_SELECT: $display("[%0t] Menu: SIZE_SELECT", $time);
+    //             STATE_CONFIRM: $display("[%0t] Menu: CONFIRM", $time);
+    //             STATE_BREWING: $display("[%0t] Menu: BREWING", $time);
+    //             STATE_COMPLETE: $display("[%0t] Menu: COMPLETE", $time);
+    //             STATE_SETTINGS: $display("[%0t] Menu: SETTINGS", $time);
+    //             STATE_ERROR: $display("[%0t] Menu: ERROR", $time);
+    //         endcase
+    //     end
         
-        // Log button presses
-        if (btn_cancel_pressed) $display("[%0t] Button: CANCEL", $time);
-        if (btn_left_pressed) $display("[%0t] Button: LEFT", $time);
-        if (btn_right_pressed) $display("[%0t] Button: RIGHT", $time);
-        if (btn_select_pressed) $display("[%0t] Button: SELECT", $time);
+    //     // Log button presses
+    //     if (btn_cancel_pressed) $display("[%0t] Button: CANCEL", $time);
+    //     if (btn_left_pressed) $display("[%0t] Button: LEFT", $time);
+    //     if (btn_right_pressed) $display("[%0t] Button: RIGHT", $time);
+    //     if (btn_select_pressed) $display("[%0t] Button: SELECT", $time);
         
-        // Log selection changes
-        if (current_menu_state == STATE_COFFEE_SELECT && (btn_left_pressed || btn_right_pressed)) begin
-            $display("[%0t] Selected Coffee Bin: %0d", $time, selected_coffee_type);
-        end
-        if (current_menu_state == STATE_DRINK_SELECT && (btn_left_pressed || btn_right_pressed)) begin
-            $display("[%0t] Selected Drink: %0d", $time, selected_drink_type);
-        end
-        if (current_menu_state == STATE_SIZE_SELECT && (btn_left_pressed || btn_right_pressed)) begin
-            $display("[%0t] Selected Size: %0d", $time, selected_size);
-        end
+    //     // Log selection changes
+    //     if (current_menu_state == STATE_COFFEE_SELECT && (btn_left_pressed || btn_right_pressed)) begin
+    //         $display("[%0t] Selected Coffee Bin: %0d", $time, selected_coffee_type);
+    //     end
+    //     if (current_menu_state == STATE_DRINK_SELECT && (btn_left_pressed || btn_right_pressed)) begin
+    //         $display("[%0t] Selected Drink: %0d", $time, selected_drink_type);
+    //     end
+    //     if (current_menu_state == STATE_SIZE_SELECT && (btn_left_pressed || btn_right_pressed)) begin
+    //         $display("[%0t] Selected Size: %0d", $time, selected_size);
+    //     end
         
-        // Log special combo
-        if (combo_detected) begin
-            $display("[%0t] Settings combo detected!", $time);
-        end
-    end
+    //     // Log special combo
+    //     if (combo_detected) begin
+    //         $display("[%0t] Settings combo detected!", $time);
+    //     end
+    // end
     // Synthesis translate_on
     
 endmodule

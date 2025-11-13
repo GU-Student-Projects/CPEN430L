@@ -46,7 +46,8 @@ module water_temp_controller (
     output reg          pressure_ready,         // Pressure in valid range
     output wire         water_system_ok,        // Overall water system status
     output reg [7:0]    current_temp,           // Current temperature (simulated)
-    output reg [7:0]    target_temp             // Target temperature
+    output reg [7:0]    target_temp,            // Target temperature
+    output reg          overheat_error          // Overheat safety flag
 );
 
     //========================================================================
@@ -58,13 +59,15 @@ module water_temp_controller (
     parameter TEMP_BREWING = 8'd200;      // Standard brewing temperature
     parameter TEMP_EXTRA_HOT = 8'd230;    // Extra hot mode
     parameter TEMP_COLD = 8'd25;          // Room temperature (cold start)
+    parameter TEMP_MAX_SAFE = 8'd245;     // Safety cutoff temperature
     
     // Temperature hysteresis
     parameter TEMP_HYSTERESIS = 8'd5;     // ±5 units around target
     
-    // Heating/cooling rates (units per cycle)
-    parameter HEAT_RATE = 8'd1;           // Heating rate (slower = realistic)
-    parameter COOL_RATE = 8'd1;           // Cooling rate
+    // These are shift amounts for exponential decay
+    parameter HEAT_RATE_SHIFT = 3;        // Divide temperature delta by 8
+    parameter COOL_RATE_SHIFT = 4;        // Divide temperature delta by 16
+    parameter MIN_RATE = 8'd1;            // Minimum change rate
     
     // Timing parameters
     parameter HEATING_CYCLE_TIME = 50_000;  // 1ms at 50MHz (heating update rate)
@@ -82,13 +85,11 @@ module water_temp_controller (
     reg [31:0] pressure_check_counter;
     reg        check_pressure;
     
-    // Temperature control state machine
     typedef enum logic [2:0] {
         STATE_COLD,         // Cold start - not heated
         STATE_HEATING,      // Actively heating
-        STATE_MAINTAINING,  // At temperature, maintaining
-        STATE_COOLING,      // Cooling down
-        STATE_READY         // At target temperature
+        STATE_AT_TEMP,      // At target temperature (merged READY + MAINTAINING)
+        STATE_COOLING       // Cooling down
     } temp_state_t;
     
     temp_state_t temp_state;
@@ -97,6 +98,8 @@ module water_temp_controller (
     reg temp_at_target;
     reg temp_above_target;
     reg temp_below_target;
+    
+    reg [7:0] temp_delta;
     
     //========================================================================
     // Timing Generators
@@ -190,7 +193,7 @@ module water_temp_controller (
                     heater_enable <= 1'b0;
                     temp_ready <= 1'b0;
                     
-                    if (heating_enable) begin
+                    if (heating_enable && !water_temp_override) begin
                         temp_state <= STATE_HEATING;
                     end
                 end
@@ -207,17 +210,16 @@ module water_temp_controller (
                         temp_ready <= 1'b0;
                         temp_state <= STATE_COLD;
                     end else if (temp_at_target) begin
-                        heater_enable <= 1'b1;  // Keep heating on
-                        temp_state <= STATE_READY;
-                    end else if (temp_below_target) begin
-                        heater_enable <= 1'b1;  // Heat up
-                    end else if (temp_above_target) begin
-                        heater_enable <= 1'b0;  // Overshoot, cool down
-                        temp_state <= STATE_MAINTAINING;
+                        // Reached target temperature
+                        heater_enable <= 1'b1;  // Keep heating on for now
+                        temp_state <= STATE_AT_TEMP;
+                    end else begin
+                        // Continue heating
+                        heater_enable <= 1'b1;
                     end
                 end
                 
-                STATE_READY: begin
+                STATE_AT_TEMP: begin
                     temp_ready <= 1'b1;
                     
                     if (!heating_enable) begin
@@ -228,34 +230,14 @@ module water_temp_controller (
                         temp_ready <= 1'b0;
                         temp_state <= STATE_COLD;
                     end else if (temp_below_target) begin
-                        heater_enable <= 1'b1;
-                        temp_state <= STATE_MAINTAINING;
-                    end else if (temp_at_target) begin
-                        // Maintain current state
+                        // Below target - heat up
                         heater_enable <= 1'b1;
                     end else if (temp_above_target) begin
+                        // Above target - turn off heater
                         heater_enable <= 1'b0;
-                        temp_state <= STATE_MAINTAINING;
-                    end
-                end
-                
-                STATE_MAINTAINING: begin
-                    if (!heating_enable) begin
-                        heater_enable <= 1'b0;
-                        temp_state <= STATE_COOLING;
-                    end else if (water_temp_override) begin
-                        heater_enable <= 1'b0;
-                        temp_ready <= 1'b0;
-                        temp_state <= STATE_COLD;
-                    end else if (temp_at_target) begin
-                        temp_state <= STATE_READY;
-                    end else if (temp_below_target) begin
+                    end else begin
+                        // At target - maintain
                         heater_enable <= 1'b1;
-                        temp_ready <= 1'b0;
-                        temp_state <= STATE_HEATING;
-                    end else if (temp_above_target) begin
-                        heater_enable <= 1'b0;
-                        temp_ready <= 1'b0;
                     end
                 end
                 
@@ -263,7 +245,7 @@ module water_temp_controller (
                     heater_enable <= 1'b0;
                     temp_ready <= 1'b0;
                     
-                    if (heating_enable) begin
+                    if (heating_enable && !water_temp_override) begin
                         temp_state <= STATE_HEATING;
                     end else if (current_temp <= TEMP_COLD + 10) begin
                         temp_state <= STATE_COLD;
@@ -281,29 +263,46 @@ module water_temp_controller (
     end
     
     //========================================================================
-    // Temperature Simulation (Physical Model)
+    // Temperature Simulation with Exponential Model
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             current_temp <= TEMP_COLD;
+            overheat_error <= 1'b0;
         end else if (update_temperature) begin
-            if (water_temp_override) begin
+            
+            if (current_temp >= TEMP_MAX_SAFE) begin
+                overheat_error <= 1'b1;
+                // Force cooling by setting temp very high to trigger cooling logic
+            end else begin
+                overheat_error <= 1'b0;
+            end
+            
+            if (water_temp_override || overheat_error) begin
                 // Override forces cold temperature
                 current_temp <= TEMP_COLD;
-            end else if (heater_enable && (current_temp < 8'd255)) begin
-                // Heating - increase temperature
-                if ((current_temp + HEAT_RATE) <= 8'd255) begin
-                    current_temp <= current_temp + HEAT_RATE;
-                end else begin
-                    current_temp <= 8'd255;  // Cap at maximum
+            end else if (heater_enable && (current_temp < TEMP_MAX_SAFE)) begin
+                if (current_temp < target_temp) begin
+                    temp_delta = (target_temp - current_temp) >> HEAT_RATE_SHIFT;
+                    if (temp_delta < MIN_RATE) temp_delta = MIN_RATE;
+                    
+                    if ((current_temp + temp_delta) <= TEMP_MAX_SAFE) begin
+                        current_temp <= current_temp + temp_delta;
+                    end else begin
+                        current_temp <= TEMP_MAX_SAFE;
+                    end
                 end
             end else if (!heater_enable && (current_temp > TEMP_COLD)) begin
-                // Cooling - decrease temperature toward ambient
-                if (current_temp >= (TEMP_COLD + COOL_RATE)) begin
-                    current_temp <= current_temp - COOL_RATE;
-                end else begin
-                    current_temp <= TEMP_COLD;  // Floor at cold
+                if (current_temp > TEMP_COLD) begin
+                    temp_delta = (current_temp - TEMP_COLD) >> COOL_RATE_SHIFT;
+                    if (temp_delta < MIN_RATE) temp_delta = MIN_RATE;
+                    
+                    if (current_temp >= (TEMP_COLD + temp_delta)) begin
+                        current_temp <= current_temp - temp_delta;
+                    end else begin
+                        current_temp <= TEMP_COLD;
+                    end
                 end
             end
         end
@@ -332,44 +331,53 @@ module water_temp_controller (
     //========================================================================
     
     // System is OK if both temperature and pressure are ready
-    assign water_system_ok = temp_ready && pressure_ready;
+    assign water_system_ok = temp_ready && pressure_ready && !overheat_error;
     
     //========================================================================
     // Debug/Monitoring (Optional - removed during synthesis)
     //========================================================================
     
     // Synthesis translate_off
-    always @(posedge clk) begin
-        // Log state transitions
-        if (temp_state != temp_state) begin  // State changed
-            case (temp_state)
-                STATE_COLD: $display("[%0t] Water Controller: STATE_COLD", $time);
-                STATE_HEATING: $display("[%0t] Water Controller: STATE_HEATING", $time);
-                STATE_READY: $display("[%0t] Water Controller: STATE_READY", $time);
-                STATE_MAINTAINING: $display("[%0t] Water Controller: STATE_MAINTAINING", $time);
-                STATE_COOLING: $display("[%0t] Water Controller: STATE_COOLING", $time);
-            endcase
-        end
+    // reg [2:0] prev_temp_state;
+    
+    // always @(posedge clk) begin
+    //     prev_temp_state <= temp_state;
         
-        // Log temperature milestones
-        if (update_temperature && temp_ready && !temp_ready) begin
-            $display("[%0t] Water temperature READY (current: %0d, target: %0d)", 
-                     $time, current_temp, target_temp);
-        end
+    //     // Log state transitions
+    //     if (temp_state != prev_temp_state) begin
+    //         case (temp_state)
+    //             STATE_COLD: $display("[%0t] Water Controller: STATE_COLD", $time);
+    //             STATE_HEATING: $display("[%0t] Water Controller: STATE_HEATING", $time);
+    //             STATE_AT_TEMP: $display("[%0t] Water Controller: STATE_AT_TEMP", $time);
+    //             STATE_COOLING: $display("[%0t] Water Controller: STATE_COOLING", $time);
+    //         endcase
+    //     end
         
-        // Log pressure issues
-        if (check_pressure && !pressure_ready) begin
-            $display("[%0t] WARNING: Water pressure NOT OK!", $time);
-        end
+    //     // Log temperature milestones
+    //     if (temp_ready && !temp_ready) begin
+    //         $display("[%0t] Water temperature READY (current: %0d, target: %0d)", 
+    //                  $time, current_temp, target_temp);
+    //     end
         
-        // Log override conditions
-        if (water_temp_override) begin
-            $display("[%0t] WARNING: Temperature override active - forcing COLD", $time);
-        end
-        if (pressure_override) begin
-            $display("[%0t] WARNING: Pressure override active - forcing ERROR", $time);
-        end
-    end
+    //     // Log pressure issues
+    //     if (check_pressure && !pressure_ready) begin
+    //         $display("[%0t] WARNING: Water pressure NOT OK!", $time);
+    //     end
+        
+    //     // Log override conditions
+    //     if (water_temp_override) begin
+    //         $display("[%0t] WARNING: Temperature override active - forcing COLD", $time);
+    //     end
+    //     if (pressure_override) begin
+    //         $display("[%0t] WARNING: Pressure override active - forcing ERROR", $time);
+    //     end
+        
+    //     // Log overheat
+    //     if (overheat_error) begin
+    //         $display("[%0t] CRITICAL: OVERHEAT detected! Temp: %0d >= Max: %0d", 
+    //                  $time, current_temp, TEMP_MAX_SAFE);
+    //     end
+    // end
     // Synthesis translate_on
     
 endmodule

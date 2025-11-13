@@ -5,6 +5,7 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
+// 
 //============================================================================
 
 `timescale 1ns/1ps
@@ -111,18 +112,11 @@ module main_fsm (
     // State machine
     reg [4:0] current_state;
     reg [4:0] next_state;
+    reg [4:0] last_state;
     
     // Timers
     reg [31:0] state_timer;
     reg [31:0] error_timer;
-    
-    // State transition flags
-    reg state_changed;
-    reg [4:0] prev_state;
-    
-    // Error tracking
-    reg error_detected;
-    reg error_cleared;
     
     // Brewing tracking
     reg brewing_in_progress;
@@ -135,19 +129,10 @@ module main_fsm (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             current_state <= STATE_INIT;
-            prev_state <= STATE_INIT;
+            last_state <= STATE_INIT;
         end else begin
+            last_state <= current_state;  // FIX: Track previous state
             current_state <= next_state;
-            prev_state <= current_state;
-        end
-    end
-    
-    // Detect state changes
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            state_changed <= 1'b0;
-        end else begin
-            state_changed <= (current_state != next_state);
         end
     end
     
@@ -353,7 +338,6 @@ module main_fsm (
             brew_started <= 1'b0;
             
         end else begin
-            // Default: single-cycle pulses off
             recipe_start_brewing <= 1'b0;
             recipe_abort_brewing <= 1'b0;
             
@@ -388,6 +372,7 @@ module main_fsm (
                     water_heating_enable <= 1'b1;
                     water_target_temp_mode <= TEMP_BREWING;
                     brewing_in_progress <= 1'b0;
+                    brew_started <= 1'b0;
                 end
                 
                 STATE_READY: begin
@@ -420,14 +405,14 @@ module main_fsm (
                     water_target_temp_mode <= TEMP_BREWING;
                     brewing_in_progress <= 1'b1;
                     
-                    // Start brewing on state entry
-                    if (state_changed && prev_state == STATE_VALIDATE) begin
+                    if (last_state != STATE_BREWING) begin
+                        // Just entered BREWING state - start brewing!
                         recipe_start_brewing <= 1'b1;
                         brew_started <= 1'b1;
                     end
                     
-                    // Abort if leaving brewing state prematurely
-                    if (state_changed && next_state != STATE_COMPLETE) begin
+                    if (current_state == STATE_BREWING && next_state != STATE_BREWING && next_state != STATE_COMPLETE) begin
+                        // Leaving BREWING prematurely (not to COMPLETE) - abort!
                         recipe_abort_brewing <= 1'b1;
                         brewing_in_progress <= 1'b0;
                     end
@@ -513,7 +498,8 @@ module main_fsm (
         if (!rst_n) begin
             state_timer <= 0;
         end else begin
-            if (state_changed) begin
+            if (current_state != last_state) begin
+                // State changed - reset timer
                 state_timer <= 0;
             end else begin
                 state_timer <= state_timer + 1;
@@ -542,30 +528,30 @@ module main_fsm (
     //========================================================================
     
     // Synthesis translate_off
-    function [8*16-1:0] state_name;
-        input [4:0] state;
-        begin
-            case (state)
-                STATE_INIT: state_name = "INIT";
-                STATE_IDLE: state_name = "IDLE";
-                STATE_HEATING: state_name = "HEATING";
-                STATE_READY: state_name = "READY";
-                STATE_VALIDATE: state_name = "VALIDATE";
-                STATE_BREWING: state_name = "BREWING";
-                STATE_COMPLETE: state_name = "COMPLETE";
-                STATE_ERROR: state_name = "ERROR";
-                STATE_SETTINGS: state_name = "SETTINGS";
-                STATE_EMERGENCY: state_name = "EMERGENCY";
-                STATE_COOLDOWN: state_name = "COOLDOWN";
-                default: state_name = "UNKNOWN";
-            endcase
-        end
-    endfunction
+    // function [8*16-1:0] state_name;
+    //     input [4:0] state;
+    //     begin
+    //         case (state)
+    //             STATE_INIT: state_name = "INIT";
+    //             STATE_IDLE: state_name = "IDLE";
+    //             STATE_HEATING: state_name = "HEATING";
+    //             STATE_READY: state_name = "READY";
+    //             STATE_VALIDATE: state_name = "VALIDATE";
+    //             STATE_BREWING: state_name = "BREWING";
+    //             STATE_COMPLETE: state_name = "COMPLETE";
+    //             STATE_ERROR: state_name = "ERROR";
+    //             STATE_SETTINGS: state_name = "SETTINGS";
+    //             STATE_EMERGENCY: state_name = "EMERGENCY";
+    //             STATE_COOLDOWN: state_name = "COOLDOWN";
+    //             default: state_name = "UNKNOWN";
+    //         endcase
+    //     end
+    // endfunction
     
     // always @(posedge clk) begin
     //     // Log state transitions
-    //     if (state_changed) begin
-    //         $display("[%0t] Main FSM: %s -> %s", $time, state_name(current_state), state_name(next_state));
+    //     if (current_state != last_state) begin
+    //         $display("[%0t] Main FSM: %s -> %s", $time, state_name(last_state), state_name(current_state));
     //     end
         
     //     // Log important events

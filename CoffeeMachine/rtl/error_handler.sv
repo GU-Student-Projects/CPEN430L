@@ -1,7 +1,15 @@
 //============================================================================
 // Module: error_handler
 // Description: Error detection, prioritization, and reporting for coffee machine
+// Author: Gabriel DiMartino
+// Date: November 2025
+// Course: CPEN-430 Digital System Design Lab
 //
+// FIXES APPLIED:
+// - Fixed error/warning counter logic (moved to combinational)
+// - Removed unused error_history register
+// - Proper use of blocking assignments in combinational logic
+// - Added error counting function for clarity
 //============================================================================
 
 `timescale 1ns/1ps
@@ -34,19 +42,27 @@ module error_handler (
     reg no_water_debounced, no_paper_debounced, no_coffee_debounced;
     reg temp_fault_debounced, pressure_fault_debounced;
     
-    reg [15:0] error_history;
     reg [3:0]  consecutive_errors;
-    reg [3:0]  prev_consecutive_errors;  // FIX: Track previous value
+    reg [3:0]  prev_consecutive_errors;
     
-    // Error Detection
+    //========================================================================
+    // Error Detection (Combinational)
+    //========================================================================
+    
     always @(*) begin
-        no_water_detected = !water_system_ok;
+        // FIX: Only detect water error on pressure fault, not temp
+        // Temperature not being ready is normal during startup/heating
+        no_water_detected = !pressure_ready;
         temp_fault_detected = !temp_ready;
         pressure_fault_detected = !pressure_ready;
         no_paper_detected = paper_empty;
         no_coffee_detected = !can_make_coffee;
         system_fault_detected = system_fault_flag || actuator_timeout;
     end
+    
+    //========================================================================
+    // Debouncing Logic
+    //========================================================================
     
     // Debouncing - No water
     always @(posedge clk or negedge rst_n) begin
@@ -133,7 +149,10 @@ module error_handler (
         end
     end
     
-    // Warning Detection (No Debouncing)
+    //========================================================================
+    // Warning Detection (Combinational - No Debouncing)
+    //========================================================================
+    
     always @(*) begin
         paper_low_detected = paper_low;
         bin0_low_detected = bin0_low;
@@ -143,7 +162,10 @@ module error_handler (
         temp_heating_detected = !temp_ready && !temp_fault_debounced;
     end
     
-    // Error and Warning Flags
+    //========================================================================
+    // Error and Warning Flags (Registered)
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             err_no_water <= 1'b0;
@@ -174,17 +196,24 @@ module error_handler (
         end
     end
     
-    // Critical Error
+    //========================================================================
+    // Critical Error Flag (Registered)
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             critical_error <= 1'b0;
         end else begin
-            critical_error <= err_no_water || err_no_paper || err_no_coffee || 
-                            err_system_fault || (err_temp_fault && err_pressure_fault);
+            // FIX: Temperature fault removed from critical errors
+            // Cold temperature during startup/heating is normal, not critical
+            critical_error <= err_no_water || err_no_paper || err_no_coffee || err_system_fault;
         end
     end
     
-    // General Error Flag
+    //========================================================================
+    // General Error Flag (Registered)
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             error_present <= 1'b0;
@@ -194,40 +223,62 @@ module error_handler (
         end
     end
     
-    // Error Counter
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            error_count <= 4'd0;
-        end else begin
-            error_count = 4'd0;
-            if (err_no_water) error_count = error_count + 1;
-            if (err_no_paper) error_count = error_count + 1;
-            if (err_no_coffee) error_count = error_count + 1;
-            if (err_temp_fault) error_count = error_count + 1;
-            if (err_pressure_fault) error_count = error_count + 1;
-            if (err_system_fault) error_count = error_count + 1;
+    //========================================================================
+    // FIX: Error Counter (Combinational Logic)
+    //========================================================================
+    
+    // Function to count number of errors
+    function [3:0] count_active_errors;
+        input err1, err2, err3, err4, err5, err6;
+        begin
+            count_active_errors = {3'd0, err1} + {3'd0, err2} + {3'd0, err3} + 
+                                 {3'd0, err4} + {3'd0, err5} + {3'd0, err6};
         end
+    endfunction
+    
+    // Combinational error counting
+    always @(*) begin
+        error_count = count_active_errors(
+            err_no_water,
+            err_no_paper,
+            err_no_coffee,
+            err_temp_fault,
+            err_pressure_fault,
+            err_system_fault
+        );
     end
     
-    // Warning Counter
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            warning_count <= 4'd0;
-        end else begin
-            warning_count = 4'd0;
-            if (warn_paper_low) warning_count = warning_count + 1;
-            if (warn_bin0_low) warning_count = warning_count + 1;
-            if (warn_bin1_low) warning_count = warning_count + 1;
-            if (warn_creamer_low) warning_count = warning_count + 1;
-            if (warn_chocolate_low) warning_count = warning_count + 1;
-            if (warn_temp_heating) warning_count = warning_count + 1;
+    //========================================================================
+    // FIX: Warning Counter (Combinational Logic)
+    //========================================================================
+    
+    // Function to count number of warnings
+    function [3:0] count_active_warnings;
+        input warn1, warn2, warn3, warn4, warn5, warn6;
+        begin
+            count_active_warnings = {3'd0, warn1} + {3'd0, warn2} + {3'd0, warn3} + 
+                                   {3'd0, warn4} + {3'd0, warn5} + {3'd0, warn6};
         end
+    endfunction
+    
+    // Combinational warning counting
+    always @(*) begin
+        warning_count = count_active_warnings(
+            warn_paper_low,
+            warn_bin0_low,
+            warn_bin1_low,
+            warn_creamer_low,
+            warn_chocolate_low,
+            warn_temp_heating
+        );
     end
     
-    // Error History Tracking - FIX: Track previous value
+    //========================================================================
+    // Consecutive Error Tracking (for diagnosis)
+    //========================================================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            error_history <= 16'd0;
             consecutive_errors <= 4'd0;
             prev_consecutive_errors <= 4'd0;
         end else begin
@@ -243,20 +294,30 @@ module error_handler (
         end
     end
     
-    // Debug/Monitoring - FIX: Only print on threshold crossings!
-    // synthesis translate_off
-    always @(posedge clk) begin
-        // Log when crossing specific thresholds only
-        if (consecutive_errors == 5 && prev_consecutive_errors == 4) begin
-            $display("[%0t] WARNING: 5 consecutive errors detected", $time);
-        end
-        if (consecutive_errors == 10 && prev_consecutive_errors == 9) begin
-            $display("[%0t] WARNING: 10 consecutive errors - System unstable!", $time);
-        end
-        if (consecutive_errors == 15 && prev_consecutive_errors == 14) begin
-            $display("[%0t] CRITICAL: 15 consecutive errors - Maximum!", $time);
-        end
-    end
-    // synthesis translate_on
+    //========================================================================
+    // Debug/Monitoring
+    //========================================================================
+    
+    // Synthesis translate_off
+    // always @(posedge clk) begin
+    //     // Log when crossing specific thresholds only
+    //     if (consecutive_errors == 5 && prev_consecutive_errors == 4) begin
+    //         $display("[%0t] WARNING: 5 consecutive errors detected", $time);
+    //     end
+    //     if (consecutive_errors == 10 && prev_consecutive_errors == 9) begin
+    //         $display("[%0t] WARNING: 10 consecutive errors - System unstable!", $time);
+    //     end
+    //     if (consecutive_errors == 15 && prev_consecutive_errors == 14) begin
+    //         $display("[%0t] CRITICAL: 15 consecutive errors - Maximum!", $time);
+    //     end
+        
+    //     // Log critical error transitions
+    //     if (critical_error && !prev_consecutive_errors) begin
+    //         $display("[%0t] CRITICAL ERROR ACTIVE - Errors: Water:%b Paper:%b Coffee:%b Temp:%b Press:%b Sys:%b",
+    //                  $time, err_no_water, err_no_paper, err_no_coffee, 
+    //                  err_temp_fault, err_pressure_fault, err_system_fault);
+    //     end
+    // end
+    // Synthesis translate_on
     
 endmodule
