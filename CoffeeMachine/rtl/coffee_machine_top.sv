@@ -5,6 +5,7 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
+// UPDATED: Swapped Reset and Select - Reset now on SW17, Select on KEY3
 //
 // Target Board: Altera DE2-115 (Cyclone IV EP4CE115)
 // Clock: 50 MHz
@@ -17,16 +18,15 @@ module coffee_machine_top (
     // Clock and Reset
     //========================================================================
     input  wire         CLOCK_50,               // 50 MHz clock from board
-    input  wire         KEY0,                   // Reset button (active-low)
     
     //========================================================================
     // Push Buttons (DE2-115 KEY[3:0])
     //========================================================================
+    input  wire         KEY0,                   // KEY[0]: Right button
     input  wire         KEY1,                   // KEY[1]: Cancel/Back button
-    input  wire         KEY2,                   // KEY[2]: Left button
-    input  wire         KEY3,                   // KEY[3]: Right button
-    // Note: KEY[0] is used as reset
-    // We'll use SW[17] as Select/Start button (more accessible)
+    input  wire         KEY2,                   // KEY[2]: Select/Start button
+    input  wire         KEY3,                   // KEY[3]: Left button
+    // Mapping: KEY3=Left, KEY2=Select, KEY1=Cancel, KEY0=Right
     
     //========================================================================
     // Switches (DE2-115 SW[17:0])
@@ -44,7 +44,7 @@ module coffee_machine_top (
     input  wire         SW10,                   // Water temp override
     input  wire         SW11,                   // System error simulation
     // SW[12-16] reserved
-    input  wire         SW17,                   // Select/Start button
+    input  wire         SW17,                   // RESET (debug/development use)
     
     //========================================================================
     // LEDs (DE2-115 LEDR[17:0] and LEDG[8:0])
@@ -117,12 +117,16 @@ module coffee_machine_top (
     // Clock is direct from board
     assign clk = CLOCK_50;
     
-    // Reset is active-low button (KEY0) - debounced
+    //========================================================================
+    // Reset on SW17
+    //========================================================================
+    
+    // Reset is now SW17 (active-low switch) - debounced for safety
     reg [19:0] reset_counter;
     reg reset_sync1, reset_sync2;
     
     always @(posedge clk) begin
-        reset_sync1 <= KEY0;
+        reset_sync1 <= SW17;
         reset_sync2 <= reset_sync1;
     end
     
@@ -323,16 +327,17 @@ module coffee_machine_top (
     
     //------------------------------------------------------------------------
     // Menu Navigator
+    // Button mapping: KEY3=Left, KEY2=Select, KEY1=Cancel, KEY0=Right
     //------------------------------------------------------------------------
     menu_navigator menu_navigator_inst (
         .clk(clk),
         .rst_n(rst_n),
         
-        // Button inputs (active-low)
-        .btn_cancel(~KEY1),
-        .btn_left(~KEY2),
-        .btn_right(~KEY3),
-        .btn_select(SW17),
+        // Button inputs (active-low for KEYs, need inversion)
+        .btn_cancel(~KEY1),         // KEY1: Cancel/Back
+        .btn_left(~KEY3),           // KEY3: Left
+        .btn_right(~KEY0),          // KEY0: Right
+        .btn_select(~KEY2),         // KEY2: Select/Start
         
         // System status
         .system_ready(system_ready),
