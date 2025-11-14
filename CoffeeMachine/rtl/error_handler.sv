@@ -44,8 +44,6 @@ module error_handler (
     //========================================================================
     
     always @(*) begin
-        // FIX: Only detect water error on pressure fault, not temp
-        // Temperature not being ready is normal during startup/heating
         no_water_detected = !pressure_ready;
         temp_fault_detected = !temp_ready;
         pressure_fault_detected = !pressure_ready;
@@ -198,15 +196,12 @@ module error_handler (
         if (!rst_n) begin
             critical_error <= 1'b0;
         end else begin
-            // FIX: Temperature fault removed from critical errors
-            // Cold temperature during startup/heating is normal, not critical
             critical_error <= err_no_water || err_no_paper || err_no_coffee || err_system_fault;
         end
     end
     
     //========================================================================
     // General Error Flag (Registered)
-    // FIX: Temperature and pressure faults removed - they're warnings only
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
@@ -218,7 +213,7 @@ module error_handler (
     end
     
     //========================================================================
-    // FIX: Error Counter (Combinational Logic)
+    // Error Counter (Combinational Logic)
     //========================================================================
     
     // Function to count number of errors
@@ -236,14 +231,14 @@ module error_handler (
             err_no_water,
             err_no_paper,
             err_no_coffee,
-            1'b0,                // FIX: Not counting temp_fault as error
-            1'b0,                // FIX: Not counting pressure_fault as error
+            1'b0,                
+            1'b0,                
             err_system_fault
         );
     end
     
     //========================================================================
-    // FIX: Warning Counter (Combinational Logic)
+    // Warning Counter (Combinational Logic)
     //========================================================================
     
     // Function to count number of warnings

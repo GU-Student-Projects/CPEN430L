@@ -5,7 +5,6 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
-// Updated: Added SystemVerilog string handling for cleaner, more readable code
 //============================================================================
 
 `timescale 1ns/1ps

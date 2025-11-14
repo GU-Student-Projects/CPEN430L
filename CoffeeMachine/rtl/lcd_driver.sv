@@ -6,9 +6,6 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
-//
-// This module is PROVEN and should not need modification.
-// Based on working lcdIp design with verified HD44780 timing.
 //============================================================================
 
 `timescale 1ns/1ps
@@ -96,7 +93,7 @@ module lcd_driver (
                            ((cmd_latched == 8'h01) || (cmd_latched == 8'h02));
 
     //========================================================================
-    // Main State Machine (EXACTLY matches working lcdIp)
+    // Main State Machine
     //========================================================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
