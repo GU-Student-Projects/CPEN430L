@@ -53,7 +53,7 @@ module message_manager (
     output reg          message_updated
 );
 
-    // Menu states
+    // Menu states (FIXED: Match corrected FSM parameters)
     parameter STATE_SPLASH = 4'd0;
     parameter STATE_CHECK_ERRORS = 4'd1;
     parameter STATE_COFFEE_SELECT = 4'd2;
@@ -66,15 +66,14 @@ module message_manager (
     parameter STATE_ERROR = 4'd9;
     parameter STATE_INSUFFICIENT = 4'd10;
     
-    // Maintenance states
-    parameter STATE_MAINTENANCE = 4'd11;
-    parameter STATE_MAINT_OPTIONS = 4'd12;
-    parameter STATE_MAINT_VIEW_ERRORS = 4'd13;
-    parameter STATE_MAINT_MANUAL_CHECK = 4'd14;
-    parameter STATE_MAINT_SERVICE_TIME = 4'd15;
+    // Abort confirmation state (FIXED: was 4'd16)
+    parameter STATE_ABORT_CONFIRM = 4'd11;
     
-    // Abort confirmation state
-    parameter STATE_ABORT_CONFIRM = 4'd16;
+    // Maintenance states
+    parameter STATE_MAINTENANCE = 4'd12;
+    parameter STATE_MAINT_OPTIONS = 4'd13;
+    parameter STATE_MAINT_VIEW_ERRORS = 4'd14;
+    parameter STATE_MAINT_MANUAL_CHECK = 4'd15;
     
     // Drink types
     parameter DRINK_BLACK_COFFEE = 3'd0;
@@ -151,7 +150,7 @@ module message_manager (
         end
     endfunction
     
-    // Format service time as string (NEW)
+    // Format service time as string
     function automatic [127:0] format_service_time;
         input [31:0] days;
         input [31:0] hours;
@@ -381,7 +380,14 @@ module message_manager (
                 end
             end
             
-            // ============ MAINTENANCE MENU MESSAGES (NEW) ============
+            // ============ ABORT CONFIRMATION (NEW) ============
+            
+            STATE_ABORT_CONFIRM: begin
+                line1_text_next = lcd_str("Abort Brewing?");
+                line2_text_next = lcd_str("Start=Yes Can=No");
+            end
+            
+            // ============ MAINTENANCE MENU MESSAGES ============
             
             STATE_MAINTENANCE: begin
                 line1_text_next = lcd_str("Entering");
@@ -400,34 +406,32 @@ module message_manager (
             end
             
             STATE_MAINT_VIEW_ERRORS: begin
-                if (error_present || warning_count > 0) begin
-                    line1_text_next = lcd_str("Active Issues:");
-                    // Show first error/warning briefly
-                    if (error_present) begin
-                        line2_text_next = lcd_str("See Error Cycle");
-                    end else begin
-                        line2_text_next = lcd_str("See Warnings");
-                    end
+                // UPDATED: Handle both view errors AND service time display
+                // Check if we're viewing service time (selected_maint_option == MAINT_SERVICE_TIME)
+                if (selected_maint_option == MAINT_SERVICE_TIME) begin
+                    // Display service timer
+                    line1_text_next = lcd_str("Time Since Srvc");
+                    line2_text_next = format_service_time(days_since_service, 
+                                                         hours_since_service);
                 end else begin
-                    line1_text_next = lcd_str("No Active");
-                    line2_text_next = lcd_str("Errors/Warnings");
+                    // Display errors/warnings
+                    if (error_present || warning_count > 0) begin
+                        line1_text_next = lcd_str("Active Issues:");
+                        if (error_present) begin
+                            line2_text_next = lcd_str("See Error Cycle");
+                        end else begin
+                            line2_text_next = lcd_str("See Warnings");
+                        end
+                    end else begin
+                        line1_text_next = lcd_str("No Active");
+                        line2_text_next = lcd_str("Errors/Warnings");
+                    end
                 end
             end
             
             STATE_MAINT_MANUAL_CHECK: begin
                 line1_text_next = lcd_str("Manual Check?");
                 line2_text_next = lcd_str("Start=Y Back=N");
-            end
-            
-            STATE_MAINT_SERVICE_TIME: begin
-                line1_text_next = lcd_str("Time Since Srvc");
-                line2_text_next = format_service_time(days_since_service, 
-                                                     hours_since_service);
-            end
-            
-            STATE_ABORT_CONFIRM: begin
-                line1_text_next = lcd_str("Abort Brewing?");
-                line2_text_next = lcd_str("Select=Yes Can=No");
             end
             
             default: begin

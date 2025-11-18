@@ -203,52 +203,52 @@ module sensor_interface (
     //========================================================================
     
     // synthesis translate_off
-    reg [1:0] paper_level_prev;
-    reg [1:0] bin0_level_prev;
-    reg [1:0] bin1_level_prev;
-    reg [1:0] pressure_level_prev;
+    // reg [1:0] paper_level_prev;
+    // reg [1:0] bin0_level_prev;
+    // reg [1:0] bin1_level_prev;
+    // reg [1:0] pressure_level_prev;
     
-    always @(posedge clk) begin
-        if (rst_n) begin
-            // Track previous values for change detection
-            paper_level_prev <= paper_level;
-            bin0_level_prev <= bin0_level;
-            bin1_level_prev <= bin1_level;
-            pressure_level_prev <= pressure_level;
+    // always @(posedge clk) begin
+    //     if (rst_n) begin
+    //         // Track previous values for change detection
+    //         paper_level_prev <= paper_level;
+    //         bin0_level_prev <= bin0_level;
+    //         bin1_level_prev <= bin1_level;
+    //         pressure_level_prev <= pressure_level;
             
-            // Log level changes
-            if (paper_level != paper_level_prev) begin
-                $display("[%0t] Sensor: Paper level changed to %0d -> value %0d", 
-                         $time, paper_level, level_to_value(paper_level));
-            end
+    //         // Log level changes
+    //         if (paper_level != paper_level_prev) begin
+    //             $display("[%0t] Sensor: Paper level changed to %0d -> value %0d", 
+    //                      $time, paper_level, level_to_value(paper_level));
+    //         end
             
-            if (bin0_level != bin0_level_prev) begin
-                $display("[%0t] Sensor: Bin 0 level changed to %0d -> value %0d", 
-                         $time, bin0_level, sensor_bin0_level);
-            end
+    //         if (bin0_level != bin0_level_prev) begin
+    //             $display("[%0t] Sensor: Bin 0 level changed to %0d -> value %0d", 
+    //                      $time, bin0_level, sensor_bin0_level);
+    //         end
             
-            if (bin1_level != bin1_level_prev) begin
-                $display("[%0t] Sensor: Bin 1 level changed to %0d -> value %0d", 
-                         $time, bin1_level, sensor_bin1_level);
-            end
+    //         if (bin1_level != bin1_level_prev) begin
+    //             $display("[%0t] Sensor: Bin 1 level changed to %0d -> value %0d", 
+    //                      $time, bin1_level, sensor_bin1_level);
+    //         end
             
-            if (pressure_level != pressure_level_prev) begin
-                case (pressure_level)
-                    PRESSURE_LOW:   $display("[%0t] Sensor: Pressure LOW (WARNING)", $time);
-                    PRESSURE_OK:    $display("[%0t] Sensor: Pressure OK", $time);
-                    PRESSURE_HIGH:  $display("[%0t] Sensor: Pressure HIGH (ERROR)", $time);
-                    PRESSURE_ERROR: $display("[%0t] Sensor: Pressure ERROR", $time);
-                endcase
-            end
+    //         if (pressure_level != pressure_level_prev) begin
+    //             case (pressure_level)
+    //                 PRESSURE_LOW:   $display("[%0t] Sensor: Pressure LOW (WARNING)", $time);
+    //                 PRESSURE_OK:    $display("[%0t] Sensor: Pressure OK", $time);
+    //                 PRESSURE_HIGH:  $display("[%0t] Sensor: Pressure HIGH (ERROR)", $time);
+    //                 PRESSURE_ERROR: $display("[%0t] Sensor: Pressure ERROR", $time);
+    //             endcase
+    //         end
             
-            // Log system fault changes
-            if (system_fault_flag && !($past(system_fault_flag, 1))) begin
-                $display("[%0t] Sensor: SYSTEM FAULT DETECTED", $time);
-            end else if (!system_fault_flag && $past(system_fault_flag, 1)) begin
-                $display("[%0t] Sensor: System fault cleared", $time);
-            end
-        end
-    end
+    //         // Log system fault changes
+    //         if (system_fault_flag && !($past(system_fault_flag, 1))) begin
+    //             $display("[%0t] Sensor: SYSTEM FAULT DETECTED", $time);
+    //         end else if (!system_fault_flag && $past(system_fault_flag, 1)) begin
+    //             $display("[%0t] Sensor: System fault cleared", $time);
+    //         end
+    //     end
+    // end
     // synthesis translate_on
 
 endmodule

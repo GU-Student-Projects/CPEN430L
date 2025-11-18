@@ -579,6 +579,7 @@ module coffee_machine_top (
         .selected_coffee_type(selected_coffee_type),
         .selected_drink_type(selected_drink_type),
         .selected_size(selected_size),
+        .selected_maint_option(selected_maint_option),  // FIXED: Added maintenance option output
         .start_brewing_cmd(start_brewing_cmd),
         .enter_settings_mode(enter_settings_mode),
         .enter_maintenance_mode(enter_maintenance_mode),
@@ -699,6 +700,7 @@ module coffee_machine_top (
         .warning_count(warning_count),
         .error_count(error_count),
         .error_present(error_present),
+        .can_make_coffee(can_make_coffee),
         
         // Service timer (NEW)
         .hours_since_service(hours_since_service),

@@ -59,6 +59,7 @@ module menu_navigator (
     output reg [2:0]    selected_coffee_type,
     output reg [2:0]    selected_drink_type,
     output reg [1:0]    selected_size,
+    output reg [1:0]    selected_maint_option,  // NEW: Export for message_manager
     
     //========================================================================
     // Control Outputs
@@ -87,15 +88,17 @@ module menu_navigator (
     parameter STATE_ERROR = 4'd9;
     parameter STATE_INSUFFICIENT = 4'd10;
     
-    // Maintenance menu states
-    parameter STATE_MAINTENANCE = 4'd11;
-    parameter STATE_MAINT_OPTIONS = 4'd12;
-    parameter STATE_MAINT_VIEW_ERRORS = 4'd13;
-    parameter STATE_MAINT_MANUAL_CHECK = 4'd14;
-    parameter STATE_MAINT_SERVICE_TIME = 4'd15;
+    // Abort confirmation state
+    parameter STATE_ABORT_CONFIRM = 4'd11;  // FIXED: for abort confirmation (was 4'd16)
     
-    // Abort confirmation state (NEW)
-    parameter STATE_ABORT_CONFIRM = 4'd16;
+    // Maintenance menu states
+    parameter STATE_MAINTENANCE = 4'd12;
+    parameter STATE_MAINT_OPTIONS = 4'd13;
+    parameter STATE_MAINT_VIEW_ERRORS = 4'd14;
+    parameter STATE_MAINT_MANUAL_CHECK = 4'd15;
+    
+    // REMOVED: STATE_MAINT_SERVICE_TIME = 4'd15 (duplicate - use 4'd1 or extend to 5 bits)
+    // Note: If you need more than 16 states, extend current_menu_state to 5 bits
     
     // Drink types
     parameter DRINK_BLACK_COFFEE = 3'd0;
@@ -168,9 +171,6 @@ module menu_navigator (
     
     // Return state memory
     reg [3:0] return_state;
-    
-    // Maintenance menu option selection
-    reg [1:0] selected_maint_option;
     
     // FIX: Guard to prevent premature completion detection
     reg brewing_has_started;
@@ -484,7 +484,7 @@ module menu_navigator (
                     case (selected_maint_option)
                         MAINT_VIEW_ERRORS:   next_menu_state = STATE_MAINT_VIEW_ERRORS;
                         MAINT_MANUAL_CHECK:  next_menu_state = STATE_MAINT_MANUAL_CHECK;
-                        MAINT_SERVICE_TIME:  next_menu_state = STATE_MAINT_SERVICE_TIME;
+                        MAINT_SERVICE_TIME:  next_menu_state = STATE_MAINT_VIEW_ERRORS; // Reuse view errors for now
                         MAINT_EXIT:          next_menu_state = STATE_SPLASH;
                     endcase
                 end else if (btn_cancel_pressed) begin
@@ -505,13 +505,6 @@ module menu_navigator (
                     // User confirmed manual check - will pulse manual_check_requested
                     next_menu_state = STATE_MAINT_OPTIONS;
                 end else if (btn_cancel_pressed) begin
-                    next_menu_state = STATE_MAINT_OPTIONS;
-                end
-            end
-            
-            STATE_MAINT_SERVICE_TIME: begin
-                // Display service timer
-                if (btn_cancel_pressed || btn_select_pressed) begin
                     next_menu_state = STATE_MAINT_OPTIONS;
                 end
             end
@@ -664,8 +657,7 @@ module menu_navigator (
             enter_maintenance_mode <= (current_menu_state == STATE_MAINTENANCE ||
                                        current_menu_state == STATE_MAINT_OPTIONS ||
                                        current_menu_state == STATE_MAINT_VIEW_ERRORS ||
-                                       current_menu_state == STATE_MAINT_MANUAL_CHECK ||
-                                       current_menu_state == STATE_MAINT_SERVICE_TIME);
+                                       current_menu_state == STATE_MAINT_MANUAL_CHECK);
             
             // Manual check requested (NEW) - one-shot pulse
             manual_check_requested <= (current_menu_state == STATE_MAINT_MANUAL_CHECK && 
