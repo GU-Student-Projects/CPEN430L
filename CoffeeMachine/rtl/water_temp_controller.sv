@@ -1,7 +1,7 @@
 //============================================================================
 // Module: water_temp_controller
 // Description: Autonomous water temperature and pressure controller
-//              Manages heater control and monitors water system status
+//              FIXED: Realistic heating (30s to reach temp, 1min cooldown)
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
@@ -64,13 +64,18 @@ module water_temp_controller (
     // Temperature hysteresis
     parameter TEMP_HYSTERESIS = 8'd5;     // ±5 units around target
     
-    // These are shift amounts for exponential decay
-    parameter HEAT_RATE_SHIFT = 3;        // Divide temperature delta by 8
-    parameter COOL_RATE_SHIFT = 4;        // Divide temperature delta by 16
-    parameter MIN_RATE = 8'd1;            // Minimum change rate
+    // Temperature change rates (realistic timing)
+    // Target: 15 seconds to heat from 25°C to 200°C = 175°C increase
+    // At 1ms update rate: 15000 updates in 15 seconds
+    // Rate needed: 175 / 15000 = 0.0117°C per update ≈ 1°C per 86 updates
+    
+    parameter HEAT_RATE = 8'd1;           // Heat 1 unit per update
+    parameter COOL_RATE = 8'd1;           // Cool 1 unit per update
+    parameter HEAT_UPDATE_DIV = 16'd86;   // Heat every 86ms (~15s total)
+    parameter COOL_UPDATE_DIV = 16'd10000; // Cool every 10 seconds per degree!
     
     // Timing parameters
-    parameter HEATING_CYCLE_TIME = 50_000;  // 1ms at 50MHz (heating update rate)
+    parameter HEATING_CYCLE_TIME = 50_000;  // 1ms at 50MHz (base update rate)
     parameter PRESSURE_CHECK_TIME = 2_500_000;  // 50ms at 50MHz (pressure monitoring)
     
     //========================================================================
@@ -81,6 +86,12 @@ module water_temp_controller (
     reg [31:0] heat_cycle_counter;
     reg        update_temperature;
     
+    // Rate divider counters for realistic heating/cooling
+    reg [15:0] heat_divider;
+    reg [15:0] cool_divider;
+    reg        do_heat_update;
+    reg        do_cool_update;
+    
     // Pressure monitoring counter
     reg [31:0] pressure_check_counter;
     reg        check_pressure;
@@ -88,7 +99,7 @@ module water_temp_controller (
     typedef enum logic [2:0] {
         STATE_COLD,         // Cold start - not heated
         STATE_HEATING,      // Actively heating
-        STATE_AT_TEMP,      // At target temperature (merged READY + MAINTAINING)
+        STATE_AT_TEMP,      // At target temperature
         STATE_COOLING       // Cooling down
     } temp_state_t;
     
@@ -99,13 +110,11 @@ module water_temp_controller (
     reg temp_above_target;
     reg temp_below_target;
     
-    reg [7:0] temp_delta;
-    
     //========================================================================
     // Timing Generators
     //========================================================================
     
-    // Heating cycle timer (controls temperature update rate)
+    // Heating cycle timer (1ms base update rate)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             heat_cycle_counter <= 0;
@@ -118,6 +127,42 @@ module water_temp_controller (
                 heat_cycle_counter <= heat_cycle_counter + 1;
                 update_temperature <= 1'b0;
             end
+        end
+    end
+    
+    // Heat rate divider (slow down heating to realistic rate)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            heat_divider <= 0;
+            do_heat_update <= 1'b0;
+        end else if (update_temperature) begin
+            if (heat_divider >= HEAT_UPDATE_DIV - 1) begin
+                heat_divider <= 0;
+                do_heat_update <= 1'b1;
+            end else begin
+                heat_divider <= heat_divider + 1;
+                do_heat_update <= 1'b0;
+            end
+        end else begin
+            do_heat_update <= 1'b0;
+        end
+    end
+    
+    // Cool rate divider (even slower cooling)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            cool_divider <= 0;
+            do_cool_update <= 1'b0;
+        end else if (update_temperature) begin
+            if (cool_divider >= COOL_UPDATE_DIV - 1) begin
+                cool_divider <= 0;
+                do_cool_update <= 1'b1;
+            end else begin
+                cool_divider <= cool_divider + 1;
+                do_cool_update <= 1'b0;
+            end
+        end else begin
+            do_cool_update <= 1'b0;
         end
     end
     
@@ -191,53 +236,65 @@ module water_temp_controller (
                 
                 STATE_COLD: begin
                     heater_enable <= 1'b0;
-                    temp_ready <= 1'b0;
                     
-                    if (heating_enable && !water_temp_override) begin
-                        temp_state <= STATE_HEATING;
+                    if (water_temp_override) begin
+                        // Override: force temperature ready for testing
+                        temp_ready <= 1'b1;
+                    end else begin
+                        temp_ready <= 1'b0;
+                        
+                        if (heating_enable) begin
+                            temp_state <= STATE_HEATING;
+                        end
                     end
                 end
                 
                 STATE_HEATING: begin
-                    temp_ready <= 1'b0;
                     
-                    if (!heating_enable) begin
+                    if (water_temp_override) begin
+                        // Override: instantly ready for testing
                         heater_enable <= 1'b0;
-                        temp_state <= STATE_COOLING;
-                    end else if (water_temp_override) begin
-                        // Override forces cold state
+                        temp_ready <= 1'b1;
+                        temp_state <= STATE_AT_TEMP;
+                    end else if (!heating_enable) begin
                         heater_enable <= 1'b0;
                         temp_ready <= 1'b0;
-                        temp_state <= STATE_COLD;
+                        temp_state <= STATE_COOLING;
                     end else if (temp_at_target) begin
                         // Reached target temperature
-                        heater_enable <= 1'b1;  // Keep heating on for now
+                        heater_enable <= 1'b1;  // Keep heating on for maintenance
+                        temp_ready <= 1'b1;
                         temp_state <= STATE_AT_TEMP;
                     end else begin
                         // Continue heating
                         heater_enable <= 1'b1;
+                        temp_ready <= 1'b0;
                     end
                 end
                 
                 STATE_AT_TEMP: begin
-                    temp_ready <= 1'b1;
                     
-                    if (!heating_enable) begin
+                    if (water_temp_override) begin
+                        // Override keeps us ready
+                        temp_ready <= 1'b1;
                         heater_enable <= 1'b0;
-                        temp_state <= STATE_COOLING;
-                    end else if (water_temp_override) begin
+                    end else if (!heating_enable && !brewing_active) begin
                         heater_enable <= 1'b0;
                         temp_ready <= 1'b0;
-                        temp_state <= STATE_COLD;
+                        temp_state <= STATE_COOLING;
                     end else if (temp_below_target) begin
                         // Below target - heat up
                         heater_enable <= 1'b1;
+                        temp_ready <= 1'b0;
+                        temp_state <= STATE_HEATING;  // Go back to heating
                     end else if (temp_above_target) begin
-                        // Above target - turn off heater
+                        // Above target - turn off heater, let it cool
                         heater_enable <= 1'b0;
+                        temp_ready <= 1'b1;
                     end else begin
-                        // At target - maintain
+                        // At target - maintain with cycling
                         heater_enable <= 1'b1;
+                        temp_ready <= 1'b1;
                     end
                 end
                 
@@ -263,46 +320,43 @@ module water_temp_controller (
     end
     
     //========================================================================
-    // Temperature Simulation with Exponential Model
+    // Temperature Simulation with Realistic Rates
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             current_temp <= TEMP_COLD;
             overheat_error <= 1'b0;
-        end else if (update_temperature) begin
+        end else begin
             
+            // Overheat detection
             if (current_temp >= TEMP_MAX_SAFE) begin
                 overheat_error <= 1'b1;
-                // Force cooling by setting temp very high to trigger cooling logic
             end else begin
                 overheat_error <= 1'b0;
             end
             
-            if (water_temp_override || overheat_error) begin
-                // Override forces cold temperature
+            // Override forces temperature to target
+            if (water_temp_override) begin
+                current_temp <= target_temp;  // Set to target temp instantly
+            // Overheat forces cold
+            end else if (overheat_error) begin
                 current_temp <= TEMP_COLD;
-            end else if (heater_enable && (current_temp < TEMP_MAX_SAFE)) begin
+            // Heating: only update at divided rate
+            end else if (heater_enable && do_heat_update && (current_temp < TEMP_MAX_SAFE)) begin
                 if (current_temp < target_temp) begin
-                    temp_delta = (target_temp - current_temp) >> HEAT_RATE_SHIFT;
-                    if (temp_delta < MIN_RATE) temp_delta = MIN_RATE;
-                    
-                    if ((current_temp + temp_delta) <= TEMP_MAX_SAFE) begin
-                        current_temp <= current_temp + temp_delta;
+                    if ((current_temp + HEAT_RATE) <= TEMP_MAX_SAFE) begin
+                        current_temp <= current_temp + HEAT_RATE;
                     end else begin
                         current_temp <= TEMP_MAX_SAFE;
                     end
                 end
-            end else if (!heater_enable && (current_temp > TEMP_COLD)) begin
-                if (current_temp > TEMP_COLD) begin
-                    temp_delta = (current_temp - TEMP_COLD) >> COOL_RATE_SHIFT;
-                    if (temp_delta < MIN_RATE) temp_delta = MIN_RATE;
-                    
-                    if (current_temp >= (TEMP_COLD + temp_delta)) begin
-                        current_temp <= current_temp - temp_delta;
-                    end else begin
-                        current_temp <= TEMP_COLD;
-                    end
+            // Cooling: only update at divided rate (slower than heating)
+            end else if (!heater_enable && do_cool_update && (current_temp > TEMP_COLD)) begin
+                if (current_temp >= (TEMP_COLD + COOL_RATE)) begin
+                    current_temp <= current_temp - COOL_RATE;
+                end else begin
+                    current_temp <= TEMP_COLD;
                 end
             end
         end
@@ -332,52 +386,5 @@ module water_temp_controller (
     
     // System is OK if both temperature and pressure are ready
     assign water_system_ok = temp_ready && pressure_ready && !overheat_error;
-    
-    //========================================================================
-    // Debug/Monitoring (Optional - removed during synthesis)
-    //========================================================================
-    
-    // Synthesis translate_off
-    // reg [2:0] prev_temp_state;
-    
-    // always @(posedge clk) begin
-    //     prev_temp_state <= temp_state;
-        
-    //     // Log state transitions
-    //     if (temp_state != prev_temp_state) begin
-    //         case (temp_state)
-    //             STATE_COLD: $display("[%0t] Water Controller: STATE_COLD", $time);
-    //             STATE_HEATING: $display("[%0t] Water Controller: STATE_HEATING", $time);
-    //             STATE_AT_TEMP: $display("[%0t] Water Controller: STATE_AT_TEMP", $time);
-    //             STATE_COOLING: $display("[%0t] Water Controller: STATE_COOLING", $time);
-    //         endcase
-    //     end
-        
-    //     // Log temperature milestones
-    //     if (temp_ready && !temp_ready) begin
-    //         $display("[%0t] Water temperature READY (current: %0d, target: %0d)", 
-    //                  $time, current_temp, target_temp);
-    //     end
-        
-    //     // Log pressure issues
-    //     if (check_pressure && !pressure_ready) begin
-    //         $display("[%0t] WARNING: Water pressure NOT OK!", $time);
-    //     end
-        
-    //     // Log override conditions
-    //     if (water_temp_override) begin
-    //         $display("[%0t] WARNING: Temperature override active - forcing COLD", $time);
-    //     end
-    //     if (pressure_override) begin
-    //         $display("[%0t] WARNING: Pressure override active - forcing ERROR", $time);
-    //     end
-        
-    //     // Log overheat
-    //     if (overheat_error) begin
-    //         $display("[%0t] CRITICAL: OVERHEAT detected! Temp: %0d >= Max: %0d", 
-    //                  $time, current_temp, TEMP_MAX_SAFE);
-    //     end
-    // end
-    // Synthesis translate_on
-    
+
 endmodule

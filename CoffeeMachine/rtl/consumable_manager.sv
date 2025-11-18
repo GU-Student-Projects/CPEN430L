@@ -1,7 +1,6 @@
 //============================================================================
 // Module: consumable_manager
 // Description: Manages consumable ingredient levels with automatic depletion
-//              and refill control for coffee machine system
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
@@ -70,10 +69,10 @@ module consumable_manager (
     // Parameters
     //========================================================================
     
-    // Level thresholds
+    // Level thresholds (aligned with smallest recipe: 8oz Latte = ~12 units)
     parameter LEVEL_FULL = 255;
     parameter LEVEL_LOW_THRESHOLD = 50;
-    parameter LEVEL_EMPTY_THRESHOLD = 10;
+    parameter LEVEL_EMPTY_THRESHOLD = 12;  // Must have at least 12 units to make smallest drink
     
     // Paper filter thresholds
     parameter PAPER_LOW_THRESHOLD = 5;
@@ -89,6 +88,12 @@ module consumable_manager (
     // Startup counter to ignore sensor glitches
     reg [31:0] startup_counter;
     reg        startup_complete;
+    
+    // Previous sensor values for change detection
+    reg [7:0] sensor_bin0_prev;
+    reg [7:0] sensor_bin1_prev;
+    reg [7:0] sensor_creamer_prev;
+    reg [7:0] sensor_chocolate_prev;
     
     //========================================================================
     // Startup Stabilization
@@ -108,6 +113,30 @@ module consumable_manager (
     end
     
     //========================================================================
+    // Sensor Change Detection
+    //========================================================================
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            sensor_bin0_prev <= LEVEL_FULL;
+            sensor_bin1_prev <= LEVEL_FULL;
+            sensor_creamer_prev <= LEVEL_FULL;
+            sensor_chocolate_prev <= LEVEL_FULL;
+        end else begin
+            sensor_bin0_prev <= sensor_bin0_level;
+            sensor_bin1_prev <= sensor_bin1_level;
+            sensor_creamer_prev <= sensor_creamer_level;
+            sensor_chocolate_prev <= sensor_chocolate_level;
+        end
+    end
+    
+    // Detect when sensor values change
+    wire bin0_sensor_changed = (sensor_bin0_level != sensor_bin0_prev);
+    wire bin1_sensor_changed = (sensor_bin1_level != sensor_bin1_prev);
+    wire creamer_sensor_changed = (sensor_creamer_level != sensor_creamer_prev);
+    wire chocolate_sensor_changed = (sensor_chocolate_level != sensor_chocolate_prev);
+    
+    //========================================================================
     // Level Management Logic - Coffee Bin 0
     //========================================================================
     
@@ -115,17 +144,22 @@ module consumable_manager (
         if (!rst_n) begin
             coffee_bin0_level <= LEVEL_FULL;
         end else begin
-            // Consumption has priority
-            if (consume_enable && consume_bin0_amount > 0) begin
+            // Check if in INFINITE mode (sensor = 255)
+            if (sensor_bin0_level == 8'd255) begin
+                // INFINITE MODE: Always stay at 255, ignore consumption
+                coffee_bin0_level <= 8'd255;
+            // Priority 1: Consumption (depletion)
+            end else if (consume_enable && consume_bin0_amount > 0) begin
                 if (coffee_bin0_level >= consume_bin0_amount) begin
                     coffee_bin0_level <= coffee_bin0_level - consume_bin0_amount;
                 end else begin
                     coffee_bin0_level <= 0;
                 end
-            // FIX: Only update from sensor after startup AND when not consuming
-            end else if (startup_complete && !consume_enable) begin
+            // Priority 2: Sensor update ONLY when sensor changes (refill/empty commands)
+            end else if (startup_complete && bin0_sensor_changed) begin
                 coffee_bin0_level <= sensor_bin0_level;
             end
+            // Otherwise: Hold current value (natural depletion tracking)
         end
     end
     
@@ -137,13 +171,17 @@ module consumable_manager (
         if (!rst_n) begin
             coffee_bin1_level <= LEVEL_FULL;
         end else begin
-            if (consume_enable && consume_bin1_amount > 0) begin
+            // Check if in INFINITE mode (sensor = 255)
+            if (sensor_bin1_level == 8'd255) begin
+                // INFINITE MODE: Always stay at 255, ignore consumption
+                coffee_bin1_level <= 8'd255;
+            end else if (consume_enable && consume_bin1_amount > 0) begin
                 if (coffee_bin1_level >= consume_bin1_amount) begin
                     coffee_bin1_level <= coffee_bin1_level - consume_bin1_amount;
                 end else begin
                     coffee_bin1_level <= 0;
                 end
-            end else if (startup_complete && !consume_enable) begin
+            end else if (startup_complete && bin1_sensor_changed) begin
                 coffee_bin1_level <= sensor_bin1_level;
             end
         end
@@ -157,13 +195,17 @@ module consumable_manager (
         if (!rst_n) begin
             creamer_level <= LEVEL_FULL;
         end else begin
-            if (consume_enable && consume_creamer_amount > 0) begin
+            // Check if in INFINITE mode (sensor = 255)
+            if (sensor_creamer_level == 8'd255) begin
+                // INFINITE MODE: Always stay at 255, ignore consumption
+                creamer_level <= 8'd255;
+            end else if (consume_enable && consume_creamer_amount > 0) begin
                 if (creamer_level >= consume_creamer_amount) begin
                     creamer_level <= creamer_level - consume_creamer_amount;
                 end else begin
                     creamer_level <= 0;
                 end
-            end else if (startup_complete && !consume_enable) begin
+            end else if (startup_complete && creamer_sensor_changed) begin
                 creamer_level <= sensor_creamer_level;
             end
         end
@@ -177,13 +219,17 @@ module consumable_manager (
         if (!rst_n) begin
             chocolate_level <= LEVEL_FULL;
         end else begin
-            if (consume_enable && consume_chocolate_amount > 0) begin
+            // Check if in INFINITE mode (sensor = 255)
+            if (sensor_chocolate_level == 8'd255) begin
+                // INFINITE MODE: Always stay at 255, ignore consumption
+                chocolate_level <= 8'd255;
+            end else if (consume_enable && consume_chocolate_amount > 0) begin
                 if (chocolate_level >= consume_chocolate_amount) begin
                     chocolate_level <= chocolate_level - consume_chocolate_amount;
                 end else begin
                     chocolate_level <= 0;
                 end
-            end else if (startup_complete && !consume_enable) begin
+            end else if (startup_complete && chocolate_sensor_changed) begin
                 chocolate_level <= sensor_chocolate_level;
             end
         end
@@ -199,9 +245,15 @@ module consumable_manager (
         end else begin
             if (consume_enable && consume_paper_filter) begin
                 if (paper_filter_count > 0) begin
-                    paper_filter_count <= paper_filter_count - 1;
+                    // Only decrement if not at PAPER_MAX (infinite mode)
+                    // If at PAPER_MAX and sensor present, assume infinite
+                    if (paper_filter_count == PAPER_MAX && paper_filter_present) begin
+                        paper_filter_count <= PAPER_MAX;  // Stay at max (infinite)
+                    end else begin
+                        paper_filter_count <= paper_filter_count - 1;
+                    end
                 end
-            end else if (startup_complete && !consume_enable) begin
+            end else if (startup_complete) begin
                 // Update paper count from sensor
                 if (paper_filter_present) begin
                     // If sensor sees paper and count is low, assume refill
@@ -242,36 +294,5 @@ module consumable_manager (
     assign can_make_coffee = !bin0_empty || !bin1_empty;
     assign can_add_creamer = !creamer_empty;
     assign can_add_chocolate = !chocolate_empty;
-    
-    //========================================================================
-    // Debug/Monitoring (Optional - removed during synthesis)
-    //========================================================================
-    
-    // Synthesis translate_off
-    // always @(posedge clk) begin
-    //     // Log startup completion
-    //     if (startup_counter == STARTUP_CYCLES) begin
-    //         $display("[%0t] Consumable Manager: Startup stabilization complete", $time);
-    //         $display("[%0t]   Bin0: %0d, Bin1: %0d, Creamer: %0d, Chocolate: %0d, Paper: %0d",
-    //                  $time, coffee_bin0_level, coffee_bin1_level, creamer_level, 
-    //                  chocolate_level, paper_filter_count);
-    //     end
-        
-    //     // Log consumption events
-    //     if (consume_enable) begin
-    //         $display("[%0t] Consumable Manager: Consuming - Bin0:%0d Bin1:%0d Creamer:%0d Chocolate:%0d Paper:%b",
-    //                  $time, consume_bin0_amount, consume_bin1_amount, 
-    //                  consume_creamer_amount, consume_chocolate_amount, consume_paper_filter);
-    //     end
-        
-    //     // Log level updates from sensors (only after startup)
-    //     if (startup_complete && !consume_enable) begin
-    //         if (coffee_bin0_level != sensor_bin0_level) begin
-    //             $display("[%0t] Consumable Manager: Bin0 updated from sensor: %0d -> %0d",
-    //                      $time, coffee_bin0_level, sensor_bin0_level);
-    //         end
-    //     end
-    // end
-    // Synthesis translate_on
-    
+
 endmodule

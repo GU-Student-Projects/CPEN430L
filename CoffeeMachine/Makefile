@@ -231,6 +231,14 @@ test_integration:
 		rtl/water_temp_controller.sv \
 		rtl/actuator_control.sv \
 		rtl/error_handler.sv \
+		rtl/coffee_machine_top.sv \
+		rtl/error_message_cycler.sv \
+		rtl/service_timer.sv \
+		rtl/sensor_interface.sv \
+		rtl/message_manager.sv \
+		rtl/lcd_controller.sv \
+		rtl/lcd_driver.sv \
+		rtl/seven_seg_decoder.sv \
 		tests/integration/coffee_machine_core_tb.sv
 	vsim -lib work -c -do "run -all; quit -f" coffee_machine_core_tb
 

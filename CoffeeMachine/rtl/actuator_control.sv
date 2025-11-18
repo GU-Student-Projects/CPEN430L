@@ -69,6 +69,7 @@ module actuator_control (
     
     // Minimum delays between operations
     parameter INTERLOCK_DELAY = 32'd2_500_000;       // 50ms between switching
+    parameter ENABLE_INTERLOCK = 1;                  // Enable interlock delay (set to 0 for testing)
     
     //========================================================================
     // Internal Registers
@@ -126,7 +127,7 @@ module actuator_control (
             water_pour_safe = 1'b0;
         end else if (!temp_ready || !pressure_ready || !paper_filter_present) begin
             water_pour_safe = 1'b0;  // Safety interlock
-        end else if (interlock_active) begin
+        end else if (ENABLE_INTERLOCK && interlock_active) begin
             water_pour_safe = 1'b0;  // Wait for interlock delay
         end else begin
             water_pour_safe = water_pour_cmd;
@@ -139,7 +140,7 @@ module actuator_control (
             water_direct_safe = 1'b0;
         end else if (!pressure_ready) begin
             water_direct_safe = 1'b0;  // Safety interlock
-        end else if (interlock_active) begin
+        end else if (ENABLE_INTERLOCK && interlock_active) begin
             water_direct_safe = 1'b0;
         end else begin
             water_direct_safe = water_direct_cmd;
@@ -150,7 +151,7 @@ module actuator_control (
     always @(*) begin
         if (system_fault || emergency_stop || grinder0_timeout) begin
             grinder0_safe = 1'b0;
-        end else if (interlock_active) begin
+        end else if (ENABLE_INTERLOCK && interlock_active) begin
             grinder0_safe = 1'b0;
         end else begin
             grinder0_safe = grinder0_cmd;
@@ -161,7 +162,7 @@ module actuator_control (
     always @(*) begin
         if (system_fault || emergency_stop || grinder1_timeout) begin
             grinder1_safe = 1'b0;
-        end else if (interlock_active) begin
+        end else if (ENABLE_INTERLOCK && interlock_active) begin
             grinder1_safe = 1'b0;
         end else begin
             grinder1_safe = grinder1_cmd;
@@ -174,7 +175,7 @@ module actuator_control (
             paper_motor_safe = 1'b0;
         end else if (!paper_filter_present && paper_motor_cmd) begin
             paper_motor_safe = 1'b0;  // Don't run if no paper
-        end else if (interlock_active) begin
+        end else if (ENABLE_INTERLOCK && interlock_active) begin
             paper_motor_safe = 1'b0;
         end else begin
             paper_motor_safe = paper_motor_cmd;
@@ -364,77 +365,77 @@ module actuator_control (
     //========================================================================
     
     // Synthesis translate_off
-    // always @(posedge clk) begin
-    //     // Log actuator activations
-    //     if (led_heater && !heater_safe) begin
-    //         $display("[%0t] Actuator: HEATER ON", $time);
-    //     end else if (!led_heater && heater_safe) begin
-    //         $display("[%0t] Actuator: HEATER OFF", $time);
-    //     end
+    always @(posedge clk) begin
+        // Log actuator activations
+        if (led_heater && !heater_safe) begin
+            $display("[%0t] Actuator: HEATER ON", $time);
+        end else if (!led_heater && heater_safe) begin
+            $display("[%0t] Actuator: HEATER OFF", $time);
+        end
         
-    //     if (led_water_pour && !water_pour_safe) begin
-    //         $display("[%0t] Actuator: WATER POUR ON", $time);
-    //     end else if (!led_water_pour && water_pour_safe) begin
-    //         $display("[%0t] Actuator: WATER POUR OFF", $time);
-    //     end
+        if (led_water_pour && !water_pour_safe) begin
+            $display("[%0t] Actuator: WATER POUR ON", $time);
+        end else if (!led_water_pour && water_pour_safe) begin
+            $display("[%0t] Actuator: WATER POUR OFF", $time);
+        end
         
-    //     if (led_water_direct && !water_direct_safe) begin
-    //         $display("[%0t] Actuator: WATER DIRECT ON", $time);
-    //     end else if (!led_water_direct && water_direct_safe) begin
-    //         $display("[%0t] Actuator: WATER DIRECT OFF", $time);
-    //     end
+        if (led_water_direct && !water_direct_safe) begin
+            $display("[%0t] Actuator: WATER DIRECT ON", $time);
+        end else if (!led_water_direct && water_direct_safe) begin
+            $display("[%0t] Actuator: WATER DIRECT OFF", $time);
+        end
         
-    //     if (led_grinder0 && !grinder0_safe) begin
-    //         $display("[%0t] Actuator: GRINDER 0 ON", $time);
-    //     end else if (!led_grinder0 && grinder0_safe) begin
-    //         $display("[%0t] Actuator: GRINDER 0 OFF", $time);
-    //     end
+        if (led_grinder0 && !grinder0_safe) begin
+            $display("[%0t] Actuator: GRINDER 0 ON", $time);
+        end else if (!led_grinder0 && grinder0_safe) begin
+            $display("[%0t] Actuator: GRINDER 0 OFF", $time);
+        end
         
-    //     if (led_grinder1 && !grinder1_safe) begin
-    //         $display("[%0t] Actuator: GRINDER 1 ON", $time);
-    //     end else if (!led_grinder1 && grinder1_safe) begin
-    //         $display("[%0t] Actuator: GRINDER 1 OFF", $time);
-    //     end
+        if (led_grinder1 && !grinder1_safe) begin
+            $display("[%0t] Actuator: GRINDER 1 ON", $time);
+        end else if (!led_grinder1 && grinder1_safe) begin
+            $display("[%0t] Actuator: GRINDER 1 OFF", $time);
+        end
         
-    //     if (led_paper_motor && !paper_motor_safe) begin
-    //         $display("[%0t] Actuator: PAPER MOTOR ON", $time);
-    //     end else if (!led_paper_motor && paper_motor_safe) begin
-    //         $display("[%0t] Actuator: PAPER MOTOR OFF", $time);
-    //     end
+        if (led_paper_motor && !paper_motor_safe) begin
+            $display("[%0t] Actuator: PAPER MOTOR ON", $time);
+        end else if (!led_paper_motor && paper_motor_safe) begin
+            $display("[%0t] Actuator: PAPER MOTOR OFF", $time);
+        end
         
-    //     // Log safety interlock violations
-    //     if (water_pour_cmd && !water_pour_safe && !water_pour_timeout) begin
-    //         if (!temp_ready) begin
-    //             $display("[%0t] SAFETY: Water pour blocked - temp not ready", $time);
-    //         end else if (!pressure_ready) begin
-    //             $display("[%0t] SAFETY: Water pour blocked - pressure not OK", $time);
-    //         end else if (!paper_filter_present) begin
-    //             $display("[%0t] SAFETY: Water pour blocked - no paper filter", $time);
-    //         end
-    //     end
+        // Log safety interlock violations
+        if (water_pour_cmd && !water_pour_safe && !water_pour_timeout) begin
+            if (!temp_ready) begin
+                $display("[%0t] SAFETY: Water pour blocked - temp not ready", $time);
+            end else if (!pressure_ready) begin
+                $display("[%0t] SAFETY: Water pour blocked - pressure not OK", $time);
+            end else if (!paper_filter_present) begin
+                $display("[%0t] SAFETY: Water pour blocked - no paper filter", $time);
+            end
+        end
         
-    //     // Log timeouts
-    //     if (grinder0_timeout) begin
-    //         $display("[%0t] TIMEOUT: Grinder 0 exceeded max time", $time);
-    //     end
-    //     if (grinder1_timeout) begin
-    //         $display("[%0t] TIMEOUT: Grinder 1 exceeded max time", $time);
-    //     end
-    //     if (water_pour_timeout) begin
-    //         $display("[%0t] TIMEOUT: Water pour exceeded max time", $time);
-    //     end
-    //     if (water_direct_timeout) begin
-    //         $display("[%0t] TIMEOUT: Water direct exceeded max time", $time);
-    //     end
-    //     if (paper_motor_timeout) begin
-    //         $display("[%0t] TIMEOUT: Paper motor exceeded max time", $time);
-    //     end
+        // Log timeouts
+        if (grinder0_timeout) begin
+            $display("[%0t] TIMEOUT: Grinder 0 exceeded max time", $time);
+        end
+        if (grinder1_timeout) begin
+            $display("[%0t] TIMEOUT: Grinder 1 exceeded max time", $time);
+        end
+        if (water_pour_timeout) begin
+            $display("[%0t] TIMEOUT: Water pour exceeded max time", $time);
+        end
+        if (water_direct_timeout) begin
+            $display("[%0t] TIMEOUT: Water direct exceeded max time", $time);
+        end
+        if (paper_motor_timeout) begin
+            $display("[%0t] TIMEOUT: Paper motor exceeded max time", $time);
+        end
         
-    //     // Log emergency stops
-    //     if (emergency_stop) begin
-    //         $display("[%0t] EMERGENCY STOP ACTIVE - All actuators disabled", $time);
-    //     end
-    // end
+        // Log emergency stops
+        if (emergency_stop) begin
+            $display("[%0t] EMERGENCY STOP ACTIVE - All actuators disabled", $time);
+        end
+    end
     // Synthesis translate_on
     
 endmodule

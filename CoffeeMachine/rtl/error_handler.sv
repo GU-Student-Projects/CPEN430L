@@ -16,6 +16,7 @@ module error_handler (
     input  wire         paper_empty, paper_low,
     input  wire         temp_ready, pressure_ready, water_system_ok,
     input  wire         system_fault_flag, actuator_timeout, recipe_valid, can_make_coffee,
+    input  wire         brewing_active,
     output reg          critical_error, error_present,
     output reg [3:0]    warning_count, error_count,
     output reg          err_no_water, err_no_paper, err_no_coffee,
@@ -25,6 +26,7 @@ module error_handler (
 );
 
     parameter ERROR_DEBOUNCE_CYCLES = 32'd2_500_000;  // 50ms at 50MHz
+    parameter TEMP_FAULT_TIMEOUT = 32'd3_000_000_000; // 60 seconds
     
     reg no_water_detected, no_paper_detected, no_coffee_detected;
     reg temp_fault_detected, pressure_fault_detected, system_fault_detected;
@@ -39,17 +41,53 @@ module error_handler (
     reg [3:0]  consecutive_errors;
     reg [3:0]  prev_consecutive_errors;
     
+    reg [31:0] brewing_temp_timer;
+    reg        brewing_temp_fault;
+    
     //========================================================================
     // Error Detection (Combinational)
     //========================================================================
     
     always @(*) begin
         no_water_detected = !pressure_ready;
-        temp_fault_detected = !temp_ready;
+        temp_fault_detected = brewing_temp_fault;
         pressure_fault_detected = !pressure_ready;
         no_paper_detected = paper_empty;
         no_coffee_detected = !can_make_coffee;
         system_fault_detected = system_fault_flag || actuator_timeout;
+    end
+    
+    //========================================================================
+    // Temperature Fault Detection During Brewing
+    // Only flag as fault if temperature doesn't come ready during brewing
+    //========================================================================
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            brewing_temp_timer <= 0;
+            brewing_temp_fault <= 1'b0;
+        end else begin
+            if (brewing_active) begin
+                // Brewing is active
+                if (!temp_ready) begin
+                    // Temperature not ready during brewing - start counting
+                    if (brewing_temp_timer >= TEMP_FAULT_TIMEOUT - 1) begin
+                        // Timeout reached - temperature fault!
+                        brewing_temp_fault <= 1'b1;
+                    end else begin
+                        brewing_temp_timer <= brewing_temp_timer + 1;
+                    end
+                end else begin
+                    // Temperature is ready - clear timer
+                    brewing_temp_timer <= 0;
+                    brewing_temp_fault <= 1'b0;
+                end
+            end else begin
+                // Not brewing - clear everything
+                brewing_temp_timer <= 0;
+                brewing_temp_fault <= 1'b0;
+            end
+        end
     end
     
     //========================================================================
@@ -151,7 +189,7 @@ module error_handler (
         bin1_low_detected = bin1_low;
         creamer_low_detected = creamer_low;
         chocolate_low_detected = chocolate_low;
-        temp_heating_detected = !temp_ready && !temp_fault_debounced;
+        temp_heating_detected = 1'b0;
     end
     
     //========================================================================
@@ -282,31 +320,5 @@ module error_handler (
             end
         end
     end
-    
-    //========================================================================
-    // Debug/Monitoring
-    //========================================================================
-    
-    // Synthesis translate_off
-    // always @(posedge clk) begin
-    //     // Log when crossing specific thresholds only
-    //     if (consecutive_errors == 5 && prev_consecutive_errors == 4) begin
-    //         $display("[%0t] WARNING: 5 consecutive errors detected", $time);
-    //     end
-    //     if (consecutive_errors == 10 && prev_consecutive_errors == 9) begin
-    //         $display("[%0t] WARNING: 10 consecutive errors - System unstable!", $time);
-    //     end
-    //     if (consecutive_errors == 15 && prev_consecutive_errors == 14) begin
-    //         $display("[%0t] CRITICAL: 15 consecutive errors - Maximum!", $time);
-    //     end
-        
-    //     // Log critical error transitions
-    //     if (critical_error && !prev_consecutive_errors) begin
-    //         $display("[%0t] CRITICAL ERROR ACTIVE - Errors: Water:%b Paper:%b Coffee:%b Temp:%b Press:%b Sys:%b",
-    //                  $time, err_no_water, err_no_paper, err_no_coffee, 
-    //                  err_temp_fault, err_pressure_fault, err_system_fault);
-    //     end
-    // end
-    // Synthesis translate_on
-    
+
 endmodule
