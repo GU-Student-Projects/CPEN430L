@@ -6,6 +6,7 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
+// MODIFIED: Added debug_current_state output for debugging
 //============================================================================
 
 `timescale 1ns/1ps
@@ -77,7 +78,12 @@ module main_fsm (
     output reg          system_ready,
     output reg          system_active,
     output reg          emergency_stop,
-    output reg [2:0]    brew_stage
+    output reg [2:0]    brew_stage,
+    
+    //========================================================================
+    // Debug Outputs
+    //========================================================================
+    output wire [4:0]   debug_current_state
 );
 
     //========================================================================
@@ -154,6 +160,12 @@ module main_fsm (
     reg brew_recipe_started;
     
     //========================================================================
+    // Debug Output Assignment
+    //========================================================================
+    
+    assign debug_current_state = current_state;
+    
+    //========================================================================
     // State Machine - State Register
     //========================================================================
     
@@ -186,41 +198,29 @@ module main_fsm (
             end
             
             //================================================================
-            // SPLASH - Welcome screen, show error/warning counts
+            // SPLASH - Display splash screen
             //================================================================
             STATE_SPLASH: begin
-                if (enter_maintenance_mode) begin
-                    next_state = STATE_MAINTENANCE;
-                end else if (critical_error) begin
+                if (state_timer >= SPLASH_DISPLAY_TIME) begin
                     next_state = STATE_ERROR_CYCLE;
-                end else if (warning_count > 0) begin
-                    // Warnings present but not critical - cycle through them
-                    next_state = STATE_ERROR_CYCLE;
-                end else if (start_brewing_cmd) begin
-                    // No errors/warnings, user pressed start - go to menu
-                    next_state = STATE_IDLE;
                 end
             end
             
             //================================================================
-            // ERROR_CYCLE - Cycle through errors and warnings
+            // ERROR_CYCLE - Cycle through errors/warnings
             //================================================================
             STATE_ERROR_CYCLE: begin
-                if (enter_maintenance_mode) begin
-                    next_state = STATE_MAINTENANCE;
-                end else if (start_brewing_cmd && !critical_error) begin
-                    // User wants to proceed despite warnings (explicit acknowledgment)
+                if (critical_error) begin
+                    next_state = STATE_ERROR;
+                end else if (menu_state == MENU_COFFEE_SELECT || 
+                           menu_state == MENU_DRINK_SELECT || 
+                           menu_state == MENU_SIZE_SELECT) begin
                     next_state = STATE_IDLE;
-                end else if (!critical_error && warning_count == 0) begin
-                    // All cleared - return to splash
-                    next_state = STATE_SPLASH;
                 end
-                // Stay in cycle if critical errors still present
-                // REMOVED: premature menu navigation exit
             end
             
             //================================================================
-            // IDLE - System ready, waiting for user to complete menu selection
+            // IDLE - Waiting for user selections
             //================================================================
             STATE_IDLE: begin
                 if (critical_error) begin
@@ -228,13 +228,9 @@ module main_fsm (
                 end else if (enter_maintenance_mode) begin
                     next_state = STATE_MAINTENANCE;
                 end else if (start_brewing_cmd) begin
-                    // FIXED: Only transition when user confirms (start_brewing_cmd pulses at MENU_CONFIRM)
-                    // Check if water system needs heating
-                    if (water_system_ok) begin
-                        next_state = STATE_READY;
-                    end else begin
-                        next_state = STATE_HEATING;
-                    end
+                    // FIXED: Always go to HEATING first
+                    // Don't check water_system_ok here - let HEATING state handle it
+                    next_state = STATE_HEATING;
                 end else if (menu_state == MENU_SPLASH) begin
                     // User cancelled back to splash
                     next_state = STATE_SPLASH;
@@ -264,120 +260,113 @@ module main_fsm (
             STATE_READY: begin
                 if (critical_error) begin
                     next_state = STATE_ERROR_CYCLE;
-                end else if (enter_maintenance_mode) begin
-                    next_state = STATE_MAINTENANCE;
-                end else if (start_brewing_cmd && recipe_valid) begin
-                    next_state = STATE_VALIDATE;
-                end else if (menu_state == MENU_SPLASH) begin
-                    next_state = STATE_SPLASH;
-                end else if (!water_system_ok) begin
-                    next_state = STATE_HEATING;
-                end
-            end
-            
-            //================================================================
-            // VALIDATE - Pre-brew system validation (automatic)
-            // System checks: recipe_valid, water temp/pressure, resources
-            //================================================================
-            STATE_VALIDATE: begin
-                if (critical_error) begin
-                    next_state = STATE_ERROR_CYCLE;
                 end else if (!recipe_valid) begin
-                    // Resources insufficient - return to menu (menu_navigator shows INSUFFICIENT)
-                    next_state = STATE_IDLE;
-                end else if (!water_temp_ready || !water_pressure_ready) begin
-                    // Water system lost readiness - reheat
-                    next_state = STATE_HEATING;
-                end else begin
-                    // All validations passed - AUTOMATIC transition to brewing
+                    next_state = STATE_ERROR;
+                end else if (menu_state == MENU_ABORT_CONFIRM) begin
+                    next_state = STATE_COOLDOWN;
+                end else if (recipe_brewing_active) begin
                     next_state = STATE_BREWING;
                 end
             end
             
             //================================================================
-            // BREWING - Active brewing cycle
-            // Recipe engine handles stage-by-stage resource checks internally
+            // VALIDATE - Final validation before brewing
+            //================================================================
+            STATE_VALIDATE: begin
+                if (critical_error) begin
+                    next_state = STATE_ERROR_CYCLE;
+                end else if (!recipe_valid) begin
+                    next_state = STATE_ERROR;
+                end else if (menu_state == MENU_ABORT_CONFIRM) begin
+                    next_state = STATE_COOLDOWN;
+                end else if (recipe_brewing_active) begin
+                    next_state = STATE_BREWING;
+                end
+            end
+            
+            //================================================================
+            // BREWING - Active brewing in progress
             //================================================================
             STATE_BREWING: begin
                 if (critical_error) begin
                     next_state = STATE_ERROR_CYCLE;
                 end else if (menu_state == MENU_ABORT_CONFIRM) begin
-                    // ADDED: User requested abort confirmation during brewing
-                    // Wait for menu_navigator to complete confirmation
-                    if (!recipe_brewing_active) begin
-                        // Abort confirmed and recipe stopped
-                        next_state = STATE_COOLDOWN;
-                    end
-                end else if (recipe_brewing_complete && brew_recipe_started) begin
-                    // FIX: Only check completion after recipe has actually started
+                    next_state = STATE_COOLDOWN;
+                end else if (brew_recipe_started && recipe_brewing_complete) begin
                     next_state = STATE_COMPLETE;
-                end else if (!recipe_brewing_active && brew_started && brew_recipe_started) begin
-                    // Recipe stopped unexpectedly (resource exhaustion or internal error)
-                    next_state = STATE_ERROR_CYCLE;
                 end
             end
             
             //================================================================
-            // COMPLETE - Brewing finished, "Enjoy Your Beverage" screen
+            // COMPLETE - Brewing complete
             //================================================================
             STATE_COMPLETE: begin
-                // FIXED: Wait for user acknowledgment OR timeout (30 seconds)
-                if (start_brewing_cmd || state_timer >= COMPLETE_TIMEOUT) begin
-                    // User pressed select (start_brewing_cmd) OR 30 seconds elapsed
-                    next_state = STATE_SPLASH;
+                if (critical_error) begin
+                    next_state = STATE_ERROR_CYCLE;
+                end else if (state_timer >= COMPLETE_TIMEOUT) begin
+                    next_state = STATE_COOLDOWN;
+                end else if (menu_state == MENU_COFFEE_SELECT || 
+                           menu_state == MENU_SPLASH) begin
+                    next_state = STATE_COOLDOWN;
                 end
             end
             
             //================================================================
-            // ERROR - Critical error handling
+            // ERROR - System error state
             //================================================================
             STATE_ERROR: begin
-                if (!critical_error && error_timer >= ERROR_RETRY_TIME) begin
-                    next_state = STATE_SPLASH;
-                end else if (enter_maintenance_mode) begin
-                    next_state = STATE_MAINTENANCE;
-                end
-            end
-            
-            //================================================================
-            // SETTINGS - Settings menu
-            //================================================================
-            STATE_SETTINGS: begin
-                if (enter_maintenance_mode) begin
-                    next_state = STATE_MAINTENANCE;
+                if (!critical_error && error_count == 0) begin
+                    if (error_timer >= ERROR_RETRY_TIME) begin
+                        next_state = STATE_IDLE;
+                    end
                 end else if (menu_state == MENU_SPLASH) begin
                     next_state = STATE_SPLASH;
                 end
             end
             
             //================================================================
-            // MAINTENANCE - Hidden maintenance menu
+            // SETTINGS - Settings menu (not fully implemented)
+            //================================================================
+            STATE_SETTINGS: begin
+                if (menu_state != MENU_SETTINGS) begin
+                    next_state = STATE_IDLE;
+                end
+            end
+            
+            //================================================================
+            // MAINTENANCE - Maintenance menu
             //================================================================
             STATE_MAINTENANCE: begin
                 if (menu_state != MENU_MAINTENANCE) begin
-                    // Exit maintenance
-                    next_state = STATE_SPLASH;
+                    next_state = STATE_IDLE;
                 end
             end
             
             //================================================================
-            // EMERGENCY - Emergency stop
+            // EMERGENCY - Emergency stop activated
             //================================================================
             STATE_EMERGENCY: begin
-                if (error_timer >= ERROR_RETRY_TIME) begin
-                    next_state = STATE_SPLASH;
+                if (!critical_error) begin
+                    next_state = STATE_COOLDOWN;
                 end
             end
             
             //================================================================
-            // COOLDOWN - System cooldown (water not in brewing mode)
+            // COOLDOWN - Cool down after brewing or abort
             //================================================================
             STATE_COOLDOWN: begin
                 if (state_timer >= COOLDOWN_TIME) begin
-                    next_state = STATE_SPLASH;
+                    if (critical_error) begin
+                        next_state = STATE_ERROR;
+                    end else begin
+                        next_state = STATE_IDLE;
+                    end
                 end
             end
             
+            //================================================================
+            // Default case
+            //================================================================
             default: begin
                 next_state = STATE_INIT;
             end
@@ -428,24 +417,24 @@ module main_fsm (
                 
                 STATE_SPLASH: begin
                     system_ready <= 1'b0;
-                    system_active <= 1'b0;
+                    system_active <= 1'b1;
                     system_fault <= 1'b0;
                     emergency_stop <= 1'b0;
                     water_heating_enable <= 1'b0;
                     water_target_temp_mode <= TEMP_STANDBY;
                     error_cycle_enable <= 1'b0;
-                    service_timer_enable <= 1'b1;  // Timer always running except in maintenance
+                    service_timer_enable <= 1'b1;
                     brew_stage <= 3'd0;
                 end
                 
                 STATE_ERROR_CYCLE: begin
                     system_ready <= 1'b0;
-                    system_active <= 1'b0;
-                    system_fault <= critical_error;
+                    system_active <= 1'b1;
+                    system_fault <= 1'b0;
                     emergency_stop <= 1'b0;
                     water_heating_enable <= 1'b0;
                     water_target_temp_mode <= TEMP_STANDBY;
-                    error_cycle_enable <= 1'b1;  // Enable cycling
+                    error_cycle_enable <= 1'b1;
                     service_timer_enable <= 1'b1;
                     brew_stage <= 3'd0;
                 end
@@ -484,6 +473,11 @@ module main_fsm (
                     error_cycle_enable <= 1'b0;
                     service_timer_enable <= 1'b1;
                     brew_stage <= 3'd0;
+                    
+                    // FIXED: Only pulse on entry to READY state, not continuously
+                    if (last_state != STATE_READY) begin
+                        recipe_start_brewing <= 1'b1;
+                    end
                 end
                 
                 STATE_VALIDATE: begin
@@ -496,6 +490,12 @@ module main_fsm (
                     error_cycle_enable <= 1'b0;
                     service_timer_enable <= 1'b1;
                     brew_stage <= 3'd0;
+                    
+                    // FIXED: Start pulsing recipe_start_brewing here
+                    // This gives recipe engine more time to see the pulse
+                    if (recipe_valid && water_temp_ready && water_pressure_ready) begin
+                        recipe_start_brewing <= 1'b1;
+                    end
                 end
                 
                 STATE_BREWING: begin
@@ -510,23 +510,25 @@ module main_fsm (
                     service_timer_enable <= 1'b1;
                     
                     // Calculate brew stage based on recipe progress
-                    // Stages: 0=Ready, 1=Heating, 2=Grinding, 3=Pouring, 4=Creamer
                     if (recipe_brewing_active) begin
                         brew_stage <= 3'd2;  // Simplified - actual stage from recipe engine
-                    end
-                    
-                    // FIX: Hold recipe_start_brewing until recipe acknowledges by going active
-                    if (last_state != STATE_BREWING) begin
-                        recipe_start_brewing <= 1'b1;  // Assert on entry
+                        brew_recipe_started <= 1'b1;   // Mark that recipe has started
                         brew_started <= 1'b1;
-                        brew_recipe_started <= 1'b0;  // Clear on entry
-                    end else if (recipe_brewing_active) begin
-                        recipe_start_brewing <= 1'b0;  // Clear once recipe starts
-                        brew_recipe_started <= 1'b1;  // Set once recipe actually starts
                     end else begin
-                        recipe_start_brewing <= 1'b1;  // HOLD until acknowledged
+                        brew_stage <= 3'd1;  // Waiting for recipe to start
                     end
                     
+                    // FIXED: Only pulse start_brewing on entry to BREWING state
+                    if (last_state != STATE_BREWING && !recipe_brewing_active) begin
+                        recipe_start_brewing <= 1'b1;
+                    end
+                    
+                    // Clear brew_recipe_started flag on entry to BREWING
+                    if (last_state != STATE_BREWING) begin
+                        brew_recipe_started <= 1'b0;
+                    end
+                    
+                    // Abort handling
                     if (current_state == STATE_BREWING && 
                         next_state != STATE_BREWING && 
                         next_state != STATE_COMPLETE) begin
@@ -546,6 +548,10 @@ module main_fsm (
                     error_cycle_enable <= 1'b0;
                     service_timer_enable <= 1'b1;
                     brew_stage <= 3'd7;  // Complete
+                    
+                    // Clear brewing flags to prevent restart
+                    brew_started <= 1'b0;
+                    brew_recipe_started <= 1'b0;
                 end
                 
                 STATE_ERROR: begin

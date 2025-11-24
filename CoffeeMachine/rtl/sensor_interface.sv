@@ -2,6 +2,7 @@
 // Module: sensor_interface
 // Description: Sensor interface with 2-bit level encoding
 //              Converts switch positions to consumable levels (0-255)
+//              UPDATED: Added 2Hz flashing LEDs for LOW levels
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
@@ -67,7 +68,17 @@ module sensor_interface (
     //========================================================================
     // System Status Outputs
     //========================================================================
-    output reg          system_fault_flag       // Simulated system fault
+    output reg          system_fault_flag,      // Simulated system fault
+    
+    //========================================================================
+    // LED Outputs (with 2Hz flashing for LOW levels)
+    //========================================================================
+    output reg          led_paper,
+    output reg          led_bin0,
+    output reg          led_bin1,
+    output reg          led_creamer,
+    output reg          led_chocolate,
+    output reg          led_pressure
 );
 
     //========================================================================
@@ -75,10 +86,10 @@ module sensor_interface (
     //========================================================================
     
     // Level encoding (2-bit switch values)
-    parameter LEVEL_EMPTY = 2'b00;           // Empty - ERROR
-    parameter LEVEL_LOW = 2'b01;             // Low - WARNING
-    parameter LEVEL_FULL = 2'b10;            // Full - NORMAL
-    parameter LEVEL_INFINITE = 2'b11;        // Infinite (for testing)
+    parameter LEVEL_EMPTY = 2'b00;           // Empty - LED solid ON
+    parameter LEVEL_LOW = 2'b01;             // Low - LED flashing 2Hz
+    parameter LEVEL_FULL = 2'b10;            // Full - LED OFF
+    parameter LEVEL_INFINITE = 2'b11;        // Infinite - LED OFF
     
     // Corresponding 8-bit levels for consumable_manager
     parameter VALUE_EMPTY = 8'd0;
@@ -92,6 +103,16 @@ module sensor_interface (
     parameter PRESSURE_HIGH = 2'b10;         // High - ERROR
     parameter PRESSURE_ERROR = 2'b11;        // Error - ERROR
     
+    // 2Hz flashing parameters
+    // 2Hz = 0.5 second period = 250ms ON, 250ms OFF
+    // At 50MHz: 250ms = 12,500,000 cycles
+    parameter FLASH_HALF_PERIOD = 32'd12_500_000;
+    
+    // For faster simulation
+    `ifdef SIMULATION
+        parameter FLASH_HALF_PERIOD_SIM = 32'd25_000;
+    `endif
+    
     //========================================================================
     // Internal Wire Signals
     //========================================================================
@@ -102,6 +123,33 @@ module sensor_interface (
     wire [1:0] creamer_level;
     wire [1:0] chocolate_level;
     wire [1:0] pressure_level;
+    
+    //========================================================================
+    // 2Hz Flash Generator
+    //========================================================================
+    
+    reg [31:0] flash_counter;
+    reg flash_state;
+    
+    `ifdef SIMULATION
+        wire [31:0] flash_period = FLASH_HALF_PERIOD_SIM;
+    `else
+        wire [31:0] flash_period = FLASH_HALF_PERIOD;
+    `endif
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            flash_counter <= 0;
+            flash_state <= 1'b0;
+        end else begin
+            if (flash_counter >= flash_period - 1) begin
+                flash_counter <= 0;
+                flash_state <= ~flash_state;  // Toggle every 250ms
+            end else begin
+                flash_counter <= flash_counter + 1;
+            end
+        end
+    end
     
     //========================================================================
     // Combine Switch Inputs
@@ -145,6 +193,24 @@ module sensor_interface (
     endfunction
     
     //========================================================================
+    // LED Control Function
+    //========================================================================
+    
+    function automatic led_state;
+        input [1:0] level;
+        input flash;
+        begin
+            case (level)
+                LEVEL_EMPTY:    led_state = 1'b1;        // Solid ON
+                LEVEL_LOW:      led_state = flash;       // Flashing 2Hz
+                LEVEL_FULL:     led_state = 1'b0;        // OFF
+                LEVEL_INFINITE: led_state = 1'b0;        // OFF
+                default:        led_state = 1'b0;        // Default OFF
+            endcase
+        end
+    endfunction
+    
+    //========================================================================
     // Register Consumable Levels
     //========================================================================
     
@@ -159,6 +225,30 @@ module sensor_interface (
             sensor_bin1_level <= level_to_value(bin1_level);
             sensor_creamer_level <= level_to_value(creamer_level);
             sensor_chocolate_level <= level_to_value(chocolate_level);
+        end
+    end
+    
+    //========================================================================
+    // LED Outputs with Flashing
+    //========================================================================
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            led_paper <= 1'b0;
+            led_bin0 <= 1'b0;
+            led_bin1 <= 1'b0;
+            led_creamer <= 1'b0;
+            led_chocolate <= 1'b0;
+            led_pressure <= 1'b0;
+        end else begin
+            led_paper <= led_state(paper_level, flash_state);
+            led_bin0 <= led_state(bin0_level, flash_state);
+            led_bin1 <= led_state(bin1_level, flash_state);
+            led_creamer <= led_state(creamer_level, flash_state);
+            led_chocolate <= led_state(chocolate_level, flash_state);
+            
+            // Pressure LED: ON when not OK (LOW, HIGH, or ERROR)
+            led_pressure <= (pressure_level != PRESSURE_OK);
         end
     end
     
@@ -197,58 +287,5 @@ module sensor_interface (
             system_fault_flag <= ~SW13;  // Inverted: SW13=0 means fault
         end
     end
-    
-    //========================================================================
-    // Debug/Monitoring (synthesis off)
-    //========================================================================
-    
-    // synthesis translate_off
-    // reg [1:0] paper_level_prev;
-    // reg [1:0] bin0_level_prev;
-    // reg [1:0] bin1_level_prev;
-    // reg [1:0] pressure_level_prev;
-    
-    // always @(posedge clk) begin
-    //     if (rst_n) begin
-    //         // Track previous values for change detection
-    //         paper_level_prev <= paper_level;
-    //         bin0_level_prev <= bin0_level;
-    //         bin1_level_prev <= bin1_level;
-    //         pressure_level_prev <= pressure_level;
-            
-    //         // Log level changes
-    //         if (paper_level != paper_level_prev) begin
-    //             $display("[%0t] Sensor: Paper level changed to %0d -> value %0d", 
-    //                      $time, paper_level, level_to_value(paper_level));
-    //         end
-            
-    //         if (bin0_level != bin0_level_prev) begin
-    //             $display("[%0t] Sensor: Bin 0 level changed to %0d -> value %0d", 
-    //                      $time, bin0_level, sensor_bin0_level);
-    //         end
-            
-    //         if (bin1_level != bin1_level_prev) begin
-    //             $display("[%0t] Sensor: Bin 1 level changed to %0d -> value %0d", 
-    //                      $time, bin1_level, sensor_bin1_level);
-    //         end
-            
-    //         if (pressure_level != pressure_level_prev) begin
-    //             case (pressure_level)
-    //                 PRESSURE_LOW:   $display("[%0t] Sensor: Pressure LOW (WARNING)", $time);
-    //                 PRESSURE_OK:    $display("[%0t] Sensor: Pressure OK", $time);
-    //                 PRESSURE_HIGH:  $display("[%0t] Sensor: Pressure HIGH (ERROR)", $time);
-    //                 PRESSURE_ERROR: $display("[%0t] Sensor: Pressure ERROR", $time);
-    //             endcase
-    //         end
-            
-    //         // Log system fault changes
-    //         if (system_fault_flag && !($past(system_fault_flag, 1))) begin
-    //             $display("[%0t] Sensor: SYSTEM FAULT DETECTED", $time);
-    //         end else if (!system_fault_flag && $past(system_fault_flag, 1)) begin
-    //             $display("[%0t] Sensor: System fault cleared", $time);
-    //         end
-    //     end
-    // end
-    // synthesis translate_on
 
 endmodule

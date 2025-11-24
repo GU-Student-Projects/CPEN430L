@@ -129,37 +129,40 @@ module recipe_engine (
     reg [7:0] recipe_chocolate [0:4];
     reg [7:0] recipe_water [0:4];
     
-    // Initialize recipes
-    initial begin
-        // Black Coffee
-        recipe_coffee[DRINK_BLACK_COFFEE] = BASE_COFFEE;
-        recipe_creamer[DRINK_BLACK_COFFEE] = 8'd0;
-        recipe_chocolate[DRINK_BLACK_COFFEE] = 8'd0;
-        recipe_water[DRINK_BLACK_COFFEE] = BASE_WATER;
-        
-        // Coffee with Cream
-        recipe_coffee[DRINK_COFFEE_CREAM] = BASE_COFFEE;
-        recipe_creamer[DRINK_COFFEE_CREAM] = BASE_CREAMER;
-        recipe_chocolate[DRINK_COFFEE_CREAM] = 8'd0;
-        recipe_water[DRINK_COFFEE_CREAM] = BASE_WATER;
-        
-        // Latte (more creamer, less coffee)
-        recipe_coffee[DRINK_LATTE] = BASE_COFFEE / 2;
-        recipe_creamer[DRINK_LATTE] = BASE_CREAMER * 2;
-        recipe_chocolate[DRINK_LATTE] = 8'd0;
-        recipe_water[DRINK_LATTE] = BASE_WATER;
-        
-        // Mocha (coffee + chocolate + creamer)
-        recipe_coffee[DRINK_MOCHA] = BASE_COFFEE;
-        recipe_creamer[DRINK_MOCHA] = BASE_CREAMER;
-        recipe_chocolate[DRINK_MOCHA] = BASE_CHOCOLATE;
-        recipe_water[DRINK_MOCHA] = BASE_WATER;
-        
-        // Hot Chocolate (no coffee, lots of chocolate and creamer)
-        recipe_coffee[DRINK_HOT_CHOCOLATE] = 8'd0;
-        recipe_creamer[DRINK_HOT_CHOCOLATE] = BASE_CREAMER;
-        recipe_chocolate[DRINK_HOT_CHOCOLATE] = BASE_CHOCOLATE * 2;
-        recipe_water[DRINK_HOT_CHOCOLATE] = BASE_WATER;
+    // FIXED: Initialize recipes on reset instead of initial block
+    // (initial blocks don't synthesize on FPGA!)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            // Black Coffee
+            recipe_coffee[DRINK_BLACK_COFFEE] <= BASE_COFFEE;
+            recipe_creamer[DRINK_BLACK_COFFEE] <= 8'd0;
+            recipe_chocolate[DRINK_BLACK_COFFEE] <= 8'd0;
+            recipe_water[DRINK_BLACK_COFFEE] <= BASE_WATER;
+            
+            // Coffee with Cream
+            recipe_coffee[DRINK_COFFEE_CREAM] <= BASE_COFFEE;
+            recipe_creamer[DRINK_COFFEE_CREAM] <= BASE_CREAMER;
+            recipe_chocolate[DRINK_COFFEE_CREAM] <= 8'd0;
+            recipe_water[DRINK_COFFEE_CREAM] <= BASE_WATER;
+            
+            // Latte (more creamer, less coffee)
+            recipe_coffee[DRINK_LATTE] <= BASE_COFFEE / 2;
+            recipe_creamer[DRINK_LATTE] <= BASE_CREAMER * 2;
+            recipe_chocolate[DRINK_LATTE] <= 8'd0;
+            recipe_water[DRINK_LATTE] <= BASE_WATER;
+            
+            // Mocha (coffee + chocolate + creamer)
+            recipe_coffee[DRINK_MOCHA] <= BASE_COFFEE;
+            recipe_creamer[DRINK_MOCHA] <= BASE_CREAMER;
+            recipe_chocolate[DRINK_MOCHA] <= BASE_CHOCOLATE;
+            recipe_water[DRINK_MOCHA] <= BASE_WATER;
+            
+            // Hot Chocolate (no coffee, lots of chocolate and creamer)
+            recipe_coffee[DRINK_HOT_CHOCOLATE] <= 8'd0;
+            recipe_creamer[DRINK_HOT_CHOCOLATE] <= BASE_CREAMER;
+            recipe_chocolate[DRINK_HOT_CHOCOLATE] <= BASE_CHOCOLATE * 2;
+            recipe_water[DRINK_HOT_CHOCOLATE] <= BASE_WATER;
+        end
     end
     
     //========================================================================
@@ -627,39 +630,39 @@ module recipe_engine (
     //========================================================================
     
     // Synthesis translate_off
-    // always @(posedge clk) begin
-    //     // Log state transitions
-    //     if (brew_state != prev_brew_state) begin
-    //         case (brew_state)
-    //             IDLE: $display("[%0t] Recipe Engine: IDLE", $time);
-    //             VALIDATE: $display("[%0t] Recipe Engine: VALIDATE", $time);
-    //             FEED_PAPER: $display("[%0t] Recipe Engine: FEED_PAPER", $time);
-    //             GRINDING: $display("[%0t] Recipe Engine: GRINDING (coffee=%0d)", $time, scaled_coffee);
-    //             POURING: $display("[%0t] Recipe Engine: POURING", $time);
-    //             DISPENSING: $display("[%0t] Recipe Engine: DISPENSING (creamer=%0d, chocolate=%0d)", 
-    //                         $time, scaled_creamer, scaled_chocolate);
-    //             SETTLING: $display("[%0t] Recipe Engine: SETTLING", $time);
-    //             COMPLETE: $display("[%0t] Recipe Engine: COMPLETE", $time);
-    //             ABORT: $display("[%0t] Recipe Engine: ABORT", $time);
-    //         endcase
-    //     end
-        
-    //     // Log consumption events (only on state entry)
-    //     if (consume_enable) begin
-    //         $display("[%0t] Recipe Engine: Consuming - Coffee B0:%0d, B1:%0d, Creamer:%0d, Chocolate:%0d, Paper:%b",
-    //                  $time, consume_bin0_amount, consume_bin1_amount, 
-    //                  consume_creamer_amount, consume_chocolate_amount, consume_paper_filter);
-    //     end
-        
-    //     // Log recipe selection
-    //     if (brew_state == VALIDATE && prev_brew_state != VALIDATE) begin
-    //         $display("[%0t] Recipe: Type=%0d, Size=%0d, Coffee=%0d units, Creamer=%0d, Chocolate=%0d",
-    //                  $time, selected_drink_type, selected_size, scaled_coffee, scaled_creamer, scaled_chocolate);
-    //         $display("[%0t] Recipe Valid: %b (coffee:%b, creamer:%b, chocolate:%b, paper:%b)",
-    //                  $time, recipe_valid, recipe_has_enough_coffee, recipe_has_enough_creamer,
-    //                  recipe_has_enough_chocolate, recipe_has_paper);
-    //     end
-    // end
+	//    always @(posedge clk) begin
+	//        // Log state transitions
+	//        if (brew_state != prev_brew_state) begin
+	//            case (brew_state)
+	//                IDLE: $display("[%0t] Recipe Engine: IDLE", $time);
+	//                VALIDATE: $display("[%0t] Recipe Engine: VALIDATE", $time);
+	//                FEED_PAPER: $display("[%0t] Recipe Engine: FEED_PAPER", $time);
+	//                GRINDING: $display("[%0t] Recipe Engine: GRINDING (coffee=%0d)", $time, scaled_coffee);
+	//                POURING: $display("[%0t] Recipe Engine: POURING", $time);
+	//                DISPENSING: $display("[%0t] Recipe Engine: DISPENSING (creamer=%0d, chocolate=%0d)", 
+	//                            $time, scaled_creamer, scaled_chocolate);
+	//                SETTLING: $display("[%0t] Recipe Engine: SETTLING", $time);
+	//                COMPLETE: $display("[%0t] Recipe Engine: COMPLETE", $time);
+	//                ABORT: $display("[%0t] Recipe Engine: ABORT", $time);
+	//            endcase
+	//        end
+	//        
+	//        // Log consumption events (only on state entry)
+	//        if (consume_enable) begin
+	//            $display("[%0t] Recipe Engine: Consuming - Coffee B0:%0d, B1:%0d, Creamer:%0d, Chocolate:%0d, Paper:%b",
+	//                     $time, consume_bin0_amount, consume_bin1_amount, 
+	//                     consume_creamer_amount, consume_chocolate_amount, consume_paper_filter);
+	//        end
+	//        
+	//        // Log recipe selection
+	//        if (brew_state == VALIDATE && prev_brew_state != VALIDATE) begin
+	//            $display("[%0t] Recipe: Type=%0d, Size=%0d, Coffee=%0d units, Creamer=%0d, Chocolate=%0d",
+	//                     $time, selected_drink_type, selected_size, scaled_coffee, scaled_creamer, scaled_chocolate);
+	//            $display("[%0t] Recipe Valid: %b (coffee:%b, creamer:%b, chocolate:%b, paper:%b)",
+	//                     $time, recipe_valid, recipe_has_enough_coffee, recipe_has_enough_creamer,
+	//                     recipe_has_enough_chocolate, recipe_has_paper);
+	//        end
+	//    end
     // Synthesis translate_on
     
 endmodule

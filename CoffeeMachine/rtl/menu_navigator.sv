@@ -361,18 +361,23 @@ module menu_navigator (
                 end
             end
             
-            STATE_CHECK_ERRORS: begin
-                if (combo_active) begin
-                    next_menu_state = STATE_MAINTENANCE;
-                end else if (error_present) begin
-                    next_menu_state = STATE_ERROR;
-                end else if (pressure_ready && can_make_coffee) begin
-                    next_menu_state = STATE_COFFEE_SELECT;
-                end else if (btn_cancel_pressed) begin
-                    next_menu_state = STATE_SPLASH;
-                end
-            end
-            
+					STATE_CHECK_ERRORS: begin
+						 if (combo_active) begin
+							  next_menu_state = STATE_MAINTENANCE;
+						 end else if (error_present && error_count > 0) begin
+							  // Critical errors - stay here, can't proceed
+							  next_menu_state = STATE_CHECK_ERRORS;
+						 end else if (warning_count > 0 && btn_select_pressed) begin
+							  // Warnings only - user can acknowledge and continue
+							  next_menu_state = STATE_COFFEE_SELECT;
+						 end else if (!error_present && !warning_count && pressure_ready && can_make_coffee) begin
+							  // No issues - auto proceed
+							  next_menu_state = STATE_COFFEE_SELECT;
+						 end else if (btn_cancel_pressed) begin
+							  next_menu_state = STATE_SPLASH;
+						 end
+					end
+									
             STATE_COFFEE_SELECT: begin
                 if (combo_active) begin
                     next_menu_state = STATE_MAINTENANCE;

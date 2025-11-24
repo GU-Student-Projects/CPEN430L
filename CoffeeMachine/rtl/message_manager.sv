@@ -210,7 +210,7 @@ module message_manager (
                     // Show counts
                     line2_text_next = lcd_str("W:X E:Y Press->"); 
                     // Format warning/error counts
-                    line2_text_next[103:96] = num_to_ascii(warning_count);
+                    line2_text_next[111:104] = num_to_ascii(warning_count);
                     line2_text_next[79:72] = num_to_ascii(error_count);
                 end else begin
                     line1_text_next = lcd_str("Coffee Machine");

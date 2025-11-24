@@ -249,6 +249,9 @@ module coffee_machine_top (
     // FSM state for LCD mux decision
     wire [4:0] fsm_current_state;  // From main FSM
     
+    // DEBUG: FSM state debug output
+    wire [4:0] debug_fsm_state;
+    
     //========================================================================
     // Internal Signals - LED Status
     //========================================================================
@@ -638,7 +641,10 @@ module coffee_machine_top (
         .system_ready(system_ready),
         .system_active(system_active),
         .emergency_stop(emergency_stop),
-        .brew_stage(brew_stage)
+        .brew_stage(brew_stage),
+        
+        // Debug outputs
+        .debug_current_state(debug_fsm_state)
     );
     
     
@@ -791,15 +797,14 @@ module coffee_machine_top (
     assign LEDR17 = emergency_stop;
     
     // Green LEDs (LEDG[7:0])
-    assign LEDG0 = recipe_brewing_active; //
+    assign LEDG0 = recipe_brewing_active;
     assign LEDG1 = temp_ready;
     assign LEDG2 = pressure_ready;
     assign LEDG3 = recipe_valid;
     assign LEDG4 = can_make_coffee;
-    assign LEDG5 = (warning_count > 0);        // Warning indicator
-    assign LEDG6 = error_present;              // Error indicator
+    assign LEDG5 = (warning_count > 0);
+    assign LEDG6 = error_present;
     assign LEDG7 = recipe_brewing_complete;
-    assign LEDG8 = 1'b0;
     
     //========================================================================
     // 7-Segment Display Drivers
