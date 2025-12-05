@@ -5,7 +5,6 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
-//
 //============================================================================
 
 `timescale 1ns/1ps
@@ -78,10 +77,10 @@ module recipe_engine (
     
     // Drink type definitions
     parameter DRINK_BLACK_COFFEE = 3'd0;
-    parameter DRINK_COFFEE_CREAM = 3'd1;
+    parameter DRINK_ESPRESSO = 3'd1;
     parameter DRINK_LATTE = 3'd2;
     parameter DRINK_MOCHA = 3'd3;
-    parameter DRINK_HOT_CHOCOLATE = 3'd4;
+    parameter DRINK_AMERICANO = 3'd4;
     
     // Size definitions
     parameter SIZE_8OZ = 2'd0;
@@ -129,8 +128,6 @@ module recipe_engine (
     reg [7:0] recipe_chocolate [0:4];
     reg [7:0] recipe_water [0:4];
     
-    // FIXED: Initialize recipes on reset instead of initial block
-    // (initial blocks don't synthesize on FPGA!)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             // Black Coffee
@@ -140,10 +137,10 @@ module recipe_engine (
             recipe_water[DRINK_BLACK_COFFEE] <= BASE_WATER;
             
             // Coffee with Cream
-            recipe_coffee[DRINK_COFFEE_CREAM] <= BASE_COFFEE;
-            recipe_creamer[DRINK_COFFEE_CREAM] <= BASE_CREAMER;
-            recipe_chocolate[DRINK_COFFEE_CREAM] <= 8'd0;
-            recipe_water[DRINK_COFFEE_CREAM] <= BASE_WATER;
+            recipe_coffee[DRINK_ESPRESSO] <= BASE_COFFEE;
+            recipe_creamer[DRINK_ESPRESSO] <= BASE_CREAMER;
+            recipe_chocolate[DRINK_ESPRESSO] <= 8'd0;
+            recipe_water[DRINK_ESPRESSO] <= BASE_WATER;
             
             // Latte (more creamer, less coffee)
             recipe_coffee[DRINK_LATTE] <= BASE_COFFEE / 2;
@@ -158,10 +155,10 @@ module recipe_engine (
             recipe_water[DRINK_MOCHA] <= BASE_WATER;
             
             // Hot Chocolate (no coffee, lots of chocolate and creamer)
-            recipe_coffee[DRINK_HOT_CHOCOLATE] <= 8'd0;
-            recipe_creamer[DRINK_HOT_CHOCOLATE] <= BASE_CREAMER;
-            recipe_chocolate[DRINK_HOT_CHOCOLATE] <= BASE_CHOCOLATE * 2;
-            recipe_water[DRINK_HOT_CHOCOLATE] <= BASE_WATER;
+            recipe_coffee[DRINK_AMERICANO] <= 8'd0;
+            recipe_creamer[DRINK_AMERICANO] <= BASE_CREAMER;
+            recipe_chocolate[DRINK_AMERICANO] <= BASE_CHOCOLATE * 2;
+            recipe_water[DRINK_AMERICANO] <= BASE_WATER;
         end
     end
     
@@ -209,7 +206,6 @@ module recipe_engine (
     //========================================================================
     
     always @(*) begin
-        // FIXED: Add bounds checking for drink type
         if (selected_drink_type > 3'd4) begin
             // Invalid drink type - use safe defaults
             scaled_coffee = 8'd0;
@@ -247,11 +243,10 @@ module recipe_engine (
     end
     
     //========================================================================
-    // Recipe Validation (FIXED: Added bounds checking)
+    // Recipe Validation
     //========================================================================
     
     always @(*) begin
-        // FIXED: Check if drink type is valid
         recipe_type_valid = (selected_drink_type <= 3'd4);
         
         if (!recipe_type_valid) begin
@@ -285,7 +280,7 @@ module recipe_engine (
                          recipe_has_paper;
     
     //========================================================================
-    // Total Brew Time Calculation (FIXED: Accurate to actual state flow)
+    // Total Brew Time Calculation
     //========================================================================
     
     always @(*) begin
@@ -308,7 +303,6 @@ module recipe_engine (
     
     //========================================================================
     // Brew Timer Target (Combinational)
-    // CRITICAL: Must be combinational so target is set BEFORE timer comparison
     //========================================================================
     
     always @(*) begin
@@ -337,7 +331,6 @@ module recipe_engine (
         end
     end
     
-    // Next state logic (FIXED: Added skip logic for GRINDING and DISPENSING)
     always @(*) begin
         next_brew_state = brew_state;
         
@@ -358,7 +351,6 @@ module recipe_engine (
             
             FEED_PAPER: begin
                 if (brew_timer >= brew_timer_target) begin
-                    // FIXED: Skip GRINDING if no coffee needed (e.g., Hot Chocolate)
                     if (scaled_coffee > 0) begin
                         next_brew_state = GRINDING;
                     end else begin
@@ -379,7 +371,6 @@ module recipe_engine (
             
             POURING: begin
                 if (brew_timer >= brew_timer_target) begin
-                    // FIXED: Skip DISPENSING if no creamer/chocolate needed
                     if (scaled_creamer > 0 || scaled_chocolate > 0) begin
                         next_brew_state = DISPENSING;
                     end else begin
@@ -456,7 +447,7 @@ module recipe_engine (
     end
     
     //========================================================================
-    // Progress Calculation Helper (FIXED: Prevent overflow)
+    // Progress Calculation Helper
     //========================================================================
     
     function automatic [7:0] calculate_progress;
@@ -469,7 +460,6 @@ module recipe_engine (
             end else if (elapsed >= total) begin
                 calculate_progress = 8'd99;  // Cap at 99% until COMPLETE
             end else begin
-                // FIXED: Use 64-bit intermediate to prevent overflow
                 temp = (elapsed * 64'd100) / {32'd0, total};
                 if (temp > 64'd99) begin
                     calculate_progress = 8'd99;
@@ -543,14 +533,12 @@ module recipe_engine (
                         consume_paper_filter <= 1'b1;
                     end
                     
-                    // FIXED: Use safe progress calculation
                     brew_progress <= calculate_progress(elapsed_brew_time, total_brew_time);
                 end
                 
                 GRINDING: begin
                     brewing_active <= 1'b1;
                     
-                    // FIXED: Only consume/grind if there's actually coffee
                     if (scaled_coffee > 0) begin
                         // Consume coffee ONLY on state entry
                         if (prev_brew_state != GRINDING) begin
@@ -570,7 +558,6 @@ module recipe_engine (
                         end
                     end
                     
-                    // FIXED: Use safe progress calculation
                     brew_progress <= calculate_progress(elapsed_brew_time, total_brew_time);
                 end
                 
@@ -578,7 +565,6 @@ module recipe_engine (
                     brewing_active <= 1'b1;
                     water_pour_enable <= 1'b1;
                     
-                    // FIXED: Use safe progress calculation
                     brew_progress <= calculate_progress(elapsed_brew_time, total_brew_time);
                 end
                 
@@ -599,14 +585,12 @@ module recipe_engine (
                         water_direct_enable <= 1'b1;
                     end
                     
-                    // FIXED: Use safe progress calculation
                     brew_progress <= calculate_progress(elapsed_brew_time, total_brew_time);
                 end
                 
                 SETTLING: begin
                     brewing_active <= 1'b1;
                     
-                    // FIXED: Use safe progress calculation
                     brew_progress <= calculate_progress(elapsed_brew_time, total_brew_time);
                 end
                 
@@ -626,7 +610,7 @@ module recipe_engine (
     end
     
     //========================================================================
-    // Debug/Monitoring (Optional - removed during synthesis)
+    // Debug/Monitoring
     //========================================================================
     
     // Synthesis translate_off

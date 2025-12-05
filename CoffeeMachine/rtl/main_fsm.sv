@@ -6,7 +6,6 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
-// MODIFIED: Added debug_current_state output for debugging
 //============================================================================
 
 `timescale 1ns/1ps
@@ -106,7 +105,7 @@ module main_fsm (
     parameter STATE_EMERGENCY = 5'd12;
     parameter STATE_COOLDOWN = 5'd13;
     
-    // Menu states (from menu_navigator)
+    // Menu states
     parameter MENU_SPLASH = 4'd0;
     parameter MENU_CHECK_ERRORS = 4'd1;
     parameter MENU_COFFEE_SELECT = 4'd2;
@@ -118,7 +117,7 @@ module main_fsm (
     parameter MENU_SETTINGS = 4'd8;
     parameter MENU_MAINTENANCE = 4'd9;
     parameter MENU_ERROR = 4'd10;
-    parameter MENU_ABORT_CONFIRM = 4'd11;  // FIXED: for abort confirmation during heating/brewing (was 4'd16)
+    parameter MENU_ABORT_CONFIRM = 4'd11;
     
     // Temperature modes
     parameter TEMP_STANDBY = 2'b00;
@@ -156,7 +155,6 @@ module main_fsm (
     reg brewing_in_progress;
     reg brew_started;
     
-    // FIX: Guard to prevent premature completion detection
     reg brew_recipe_started;
     
     //========================================================================
@@ -228,8 +226,6 @@ module main_fsm (
                 end else if (enter_maintenance_mode) begin
                     next_state = STATE_MAINTENANCE;
                 end else if (start_brewing_cmd) begin
-                    // FIXED: Always go to HEATING first
-                    // Don't check water_system_ok here - let HEATING state handle it
                     next_state = STATE_HEATING;
                 end else if (menu_state == MENU_SPLASH) begin
                     // User cancelled back to splash
@@ -245,7 +241,6 @@ module main_fsm (
                 if (critical_error) begin
                     next_state = STATE_ERROR_CYCLE;
                 end else if (menu_state == MENU_ABORT_CONFIRM) begin
-                    // FIXED: User confirmed abort during heating - go to cooldown
                     next_state = STATE_COOLDOWN;
                 end else if (water_temp_ready && water_pressure_ready) begin
                     // Water system ready - proceed to validation
@@ -491,8 +486,6 @@ module main_fsm (
                     service_timer_enable <= 1'b1;
                     brew_stage <= 3'd0;
                     
-                    // FIXED: Start pulsing recipe_start_brewing here
-                    // This gives recipe engine more time to see the pulse
                     if (recipe_valid && water_temp_ready && water_pressure_ready) begin
                         recipe_start_brewing <= 1'b1;
                     end
@@ -511,14 +504,13 @@ module main_fsm (
                     
                     // Calculate brew stage based on recipe progress
                     if (recipe_brewing_active) begin
-                        brew_stage <= 3'd2;  // Simplified - actual stage from recipe engine
-                        brew_recipe_started <= 1'b1;   // Mark that recipe has started
+                        brew_stage <= 3'd2;
+                        brew_recipe_started <= 1'b1;
                         brew_started <= 1'b1;
                     end else begin
-                        brew_stage <= 3'd1;  // Waiting for recipe to start
+                        brew_stage <= 3'd1;
                     end
                     
-                    // FIXED: Only pulse start_brewing on entry to BREWING state
                     if (last_state != STATE_BREWING && !recipe_brewing_active) begin
                         recipe_start_brewing <= 1'b1;
                     end
@@ -593,11 +585,9 @@ module main_fsm (
                     water_target_temp_mode <= TEMP_STANDBY;
                     brewing_in_progress <= 1'b0;
                     error_cycle_enable <= 1'b0;
-                    service_timer_enable <= 1'b0;  // PAUSE timer in maintenance
+                    service_timer_enable <= 1'b0;
                     brew_stage <= 3'd0;
                     
-                    // Manual check can clear timer from maintenance menu
-                    // This will be controlled by menu_navigator
                 end
                 
                 STATE_EMERGENCY: begin

@@ -45,7 +45,7 @@ module error_handler (
     reg        brewing_temp_fault;
     
     //========================================================================
-    // Error Detection (Combinational)
+    // Error Detection
     //========================================================================
     
     always @(*) begin
@@ -180,7 +180,7 @@ module error_handler (
     end
     
     //========================================================================
-    // Warning Detection (Combinational - No Debouncing)
+    // Warning Detection
     //========================================================================
     
     always @(*) begin
@@ -193,7 +193,7 @@ module error_handler (
     end
     
     //========================================================================
-    // Error and Warning Flags (Registered)
+    // Error and Warning Flags
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
@@ -227,7 +227,7 @@ module error_handler (
     end
     
     //========================================================================
-    // Critical Error Flag (Registered)
+    // Critical Error Flag
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
@@ -239,7 +239,7 @@ module error_handler (
     end
     
     //========================================================================
-    // General Error Flag (Registered)
+    // General Error Flag
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
@@ -251,7 +251,7 @@ module error_handler (
     end
     
     //========================================================================
-    // Error Counter (Combinational Logic)
+    // Error Counter
     //========================================================================
     
     // Function to count number of errors
@@ -276,7 +276,7 @@ module error_handler (
     end
     
     //========================================================================
-    // Warning Counter (Combinational Logic)
+    // Warning Counter
     //========================================================================
     
     // Function to count number of warnings
@@ -301,7 +301,7 @@ module error_handler (
     end
     
     //========================================================================
-    // Consecutive Error Tracking (for diagnosis)
+    // Consecutive Error Tracking
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin

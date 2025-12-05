@@ -1,8 +1,9 @@
 //============================================================================
 // Module: water_temp_controller  
-// Description: FIXED - Override now properly forces temp_ready
+// Description: Override now properly forces temp_ready
 // Author: Gabriel DiMartino
 // Date: November 2025
+// Course: CPEN-430 Digital System Design Lab
 //============================================================================
 
 `timescale 1ns/1ps
@@ -170,7 +171,7 @@ module water_temp_controller (
     end
     
     //========================================================================
-    // Temperature Control State Machine - FIXED OVERRIDE LOGIC
+    // Temperature Control State Machine
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
@@ -179,7 +180,6 @@ module water_temp_controller (
             heater_enable <= 1'b0;
             temp_ready <= 1'b0;
         end else begin
-            // FIXED: Override forces temp_ready regardless of state
             if (water_temp_override) begin
                 temp_ready <= 1'b1;  // Force ready when override is active
                 heater_enable <= 1'b0;  // Don't need heater with override
@@ -256,7 +256,7 @@ module water_temp_controller (
     end
     
     //========================================================================
-    // Temperature Simulation - FIXED OVERRIDE LOGIC
+    // Temperature Simulation
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin
@@ -270,7 +270,6 @@ module water_temp_controller (
                 overheat_error <= 1'b0;
             end
             
-            // FIXED: Override sets temp to BREWING target (not current target_temp)
             if (water_temp_override) begin
                 current_temp <= TEMP_BREWING;  // Always go to brewing temp with override
             end else if (overheat_error) begin

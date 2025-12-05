@@ -1,6 +1,6 @@
 //============================================================================
 // Module: actuator_control
-// Description: Actuator control with INTERLOCK DISABLED for testing
+// Description: Actuator control
 // Author: Gabriel DiMartino
 // Date: November 2025
 //============================================================================
@@ -37,7 +37,7 @@ module actuator_control (
     parameter WATER_MAX_TIME = 32'd500_000_000;
     parameter PAPER_MAX_TIME = 32'd50_000_000;
     parameter INTERLOCK_DELAY = 32'd2_500_000;
-    parameter ENABLE_INTERLOCK = 0;  // FIXED: Disabled for testing (was 1)
+    parameter ENABLE_INTERLOCK = 0;
     
     reg heater_safe;
     reg water_pour_safe;

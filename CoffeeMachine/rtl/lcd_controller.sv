@@ -6,9 +6,6 @@
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
-//
-// This module can be customized for your specific application.
-// Handles conversion from 128-bit strings to individual LCD commands.
 //============================================================================
 
 `timescale 1ns/1ps
@@ -21,7 +18,7 @@ module lcd_controller (
     input  wire         rst_n,          // Active-low reset
     
     //========================================================================
-    // String Interface (from application)
+    // String Interface
     //========================================================================
     input  wire [127:0] line1_data,     // Line 1: 16 characters (8 bits each)
     input  wire [127:0] line2_data,     // Line 2: 16 characters (8 bits each)

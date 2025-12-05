@@ -59,7 +59,7 @@ module menu_navigator (
     output reg [2:0]    selected_coffee_type,
     output reg [2:0]    selected_drink_type,
     output reg [1:0]    selected_size,
-    output reg [1:0]    selected_maint_option,  // NEW: Export for message_manager
+    output reg [1:0]    selected_maint_option,
     
     //========================================================================
     // Control Outputs
@@ -89,23 +89,21 @@ module menu_navigator (
     parameter STATE_INSUFFICIENT = 4'd10;
     
     // Abort confirmation state
-    parameter STATE_ABORT_CONFIRM = 4'd11;  // FIXED: for abort confirmation (was 4'd16)
+    parameter STATE_ABORT_CONFIRM = 4'd11;
     
     // Maintenance menu states
     parameter STATE_MAINTENANCE = 4'd12;
     parameter STATE_MAINT_OPTIONS = 4'd13;
     parameter STATE_MAINT_VIEW_ERRORS = 4'd14;
     parameter STATE_MAINT_MANUAL_CHECK = 4'd15;
-    
-    // REMOVED: STATE_MAINT_SERVICE_TIME = 4'd15 (duplicate - use 4'd1 or extend to 5 bits)
-    // Note: If you need more than 16 states, extend current_menu_state to 5 bits
+
     
     // Drink types
     parameter DRINK_BLACK_COFFEE = 3'd0;
-    parameter DRINK_COFFEE_CREAM = 3'd1;
+    parameter DRINK_ESPRESSO = 3'd1;
     parameter DRINK_LATTE = 3'd2;
     parameter DRINK_MOCHA = 3'd3;
-    parameter DRINK_HOT_CHOCOLATE = 3'd4;
+    parameter DRINK_AMERICANO = 3'd4;
     parameter NUM_DRINKS = 3'd5;
     
     // Size options
@@ -172,7 +170,7 @@ module menu_navigator (
     // Return state memory
     reg [3:0] return_state;
     
-    // FIX: Guard to prevent premature completion detection
+    // Guard to prevent premature completion detection
     reg brewing_has_started;
     
     //========================================================================
@@ -328,7 +326,7 @@ module menu_navigator (
     end
     
     //========================================================================
-    // FIX: Brewing Started Guard
+    // Brewing Started Guard
     // Track when brewing has actually started to prevent premature completion
     //========================================================================
     
@@ -431,7 +429,6 @@ module menu_navigator (
             end
             
             STATE_BREWING: begin
-                // FIX: During brewing, ONLY allow cancel button (for abort request)
                 // Block completion detection until brewing has actually started
                 if (btn_cancel_pressed) begin
                     next_menu_state = STATE_ABORT_CONFIRM;
@@ -489,7 +486,7 @@ module menu_navigator (
                     case (selected_maint_option)
                         MAINT_VIEW_ERRORS:   next_menu_state = STATE_MAINT_VIEW_ERRORS;
                         MAINT_MANUAL_CHECK:  next_menu_state = STATE_MAINT_MANUAL_CHECK;
-                        MAINT_SERVICE_TIME:  next_menu_state = STATE_MAINT_VIEW_ERRORS; // Reuse view errors for now
+                        MAINT_SERVICE_TIME:  next_menu_state = STATE_MAINT_VIEW_ERRORS;
                         MAINT_EXIT:          next_menu_state = STATE_SPLASH;
                     endcase
                 end else if (btn_cancel_pressed) begin
@@ -507,7 +504,6 @@ module menu_navigator (
             STATE_MAINT_MANUAL_CHECK: begin
                 // Manual check confirmation
                 if (btn_select_pressed) begin
-                    // User confirmed manual check - will pulse manual_check_requested
                     next_menu_state = STATE_MAINT_OPTIONS;
                 end else if (btn_cancel_pressed) begin
                     next_menu_state = STATE_MAINT_OPTIONS;
@@ -651,20 +647,18 @@ module menu_navigator (
             manual_check_requested <= 1'b0;
             display_refresh <= 1'b0;
         end else begin
-            // Start brewing command (one-shot)
+            // Start brewing command
             start_brewing_cmd <= (current_menu_state == STATE_CONFIRM && 
                                  next_menu_state == STATE_BREWING);
             
             // Enter settings mode
             enter_settings_mode <= (current_menu_state == STATE_SETTINGS);
             
-            // Enter maintenance mode (NEW)
             enter_maintenance_mode <= (current_menu_state == STATE_MAINTENANCE ||
                                        current_menu_state == STATE_MAINT_OPTIONS ||
                                        current_menu_state == STATE_MAINT_VIEW_ERRORS ||
                                        current_menu_state == STATE_MAINT_MANUAL_CHECK);
             
-            // Manual check requested (NEW) - one-shot pulse
             manual_check_requested <= (current_menu_state == STATE_MAINT_MANUAL_CHECK && 
                                       btn_select_pressed);
             

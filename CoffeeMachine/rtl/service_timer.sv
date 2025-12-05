@@ -119,19 +119,19 @@ module service_timer (
     //========================================================================
     
     // synthesis translate_off
-    always @(posedge clk) begin
-        if (manual_check_pulse) begin
-            $display("[%0t] Service Timer: RESET - Manual check performed", $time);
-        end
+    // always @(posedge clk) begin
+    //     if (manual_check_pulse) begin
+    //         $display("[%0t] Service Timer: RESET - Manual check performed", $time);
+    //     end
         
-        // Log every hour
-        if (timer_enable && (cycle_counter == SECOND_CYCLES - 1)) begin
-            if (second_counter % 3600 == 0 && second_counter > 0) begin
-                $display("[%0t] Service Timer: %0d hours since last service", 
-                         $time, hours_since_service);
-            end
-        end
-    end
+    //     // Log every hour
+    //     if (timer_enable && (cycle_counter == SECOND_CYCLES - 1)) begin
+    //         if (second_counter % 3600 == 0 && second_counter > 0) begin
+    //             $display("[%0t] Service Timer: %0d hours since last service", 
+    //                      $time, hours_since_service);
+    //         end
+    //     end
+    // end
     // synthesis translate_on
 
 endmodule

@@ -69,10 +69,10 @@ module consumable_manager (
     // Parameters
     //========================================================================
     
-    // Level thresholds (aligned with smallest recipe: 8oz Latte = ~12 units)
+    // Level thresholds
     parameter LEVEL_FULL = 255;
     parameter LEVEL_LOW_THRESHOLD = 50;
-    parameter LEVEL_EMPTY_THRESHOLD = 12;  // Must have at least 12 units to make smallest drink
+    parameter LEVEL_EMPTY_THRESHOLD = 12;
     
     // Paper filter thresholds
     parameter PAPER_LOW_THRESHOLD = 5;

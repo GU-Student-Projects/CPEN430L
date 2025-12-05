@@ -14,7 +14,7 @@ module error_message_cycler (
     input  wire         rst_n,
     
     // Enable cycling
-    input  wire         cycle_enable,           // Enable message cycling
+    input  wire         cycle_enable,
     
     // Error flags from error_handler
     input  wire         err_no_water,
@@ -37,10 +37,10 @@ module error_message_cycler (
     input  wire         bin1_empty,
     
     // Outputs
-    output reg [127:0]  line1_text,             // LCD line 1
-    output reg [127:0]  line2_text,             // LCD line 2
-    output reg          message_updated,        // Pulse when message changes
-    output reg [3:0]    current_message_index   // Current message being displayed (for debug)
+    output reg [127:0]  line1_text,
+    output reg [127:0]  line2_text,
+    output reg          message_updated,
+    output reg [3:0]    current_message_index
 );
 
     //========================================================================

@@ -18,7 +18,7 @@ module lcd_driver (
     input  wire         rst_n,          // Active-low reset
     
     //========================================================================
-    // Command Interface (from application)
+    // Command Interface
     //========================================================================
     input  wire         send,           // Pulse to send command/data
     input  wire [7:0]   cmd_byte,       // Command or data byte to send

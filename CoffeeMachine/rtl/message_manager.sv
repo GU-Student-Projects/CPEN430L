@@ -4,6 +4,7 @@
 //              Displays maintenance options, service timer, and error lists
 // Author: Gabriel DiMartino
 // Date: November 2025
+// Course: CPEN-430 Digital System Design Lab
 //============================================================================
 
 `timescale 1ns/1ps
@@ -53,7 +54,7 @@ module message_manager (
     output reg          message_updated
 );
 
-    // Menu states (FIXED: Match corrected FSM parameters)
+    // Menu states
     parameter STATE_SPLASH = 4'd0;
     parameter STATE_CHECK_ERRORS = 4'd1;
     parameter STATE_COFFEE_SELECT = 4'd2;
@@ -66,7 +67,7 @@ module message_manager (
     parameter STATE_ERROR = 4'd9;
     parameter STATE_INSUFFICIENT = 4'd10;
     
-    // Abort confirmation state (FIXED: was 4'd16)
+    // Abort confirmation state 
     parameter STATE_ABORT_CONFIRM = 4'd11;
     
     // Maintenance states
@@ -77,10 +78,10 @@ module message_manager (
     
     // Drink types
     parameter DRINK_BLACK_COFFEE = 3'd0;
-    parameter DRINK_COFFEE_CREAM = 3'd1;
+    parameter DRINK_ESPRESSO = 3'd1;
     parameter DRINK_LATTE = 3'd2;
     parameter DRINK_MOCHA = 3'd3;
-    parameter DRINK_HOT_CHOCOLATE = 3'd4;
+    parameter DRINK_AMERICANO = 3'd4;
     
     // Sizes
     parameter SIZE_8OZ = 2'd0;
@@ -107,7 +108,7 @@ module message_manager (
         int i;
         byte unsigned c;
         begin
-            lcd_str = {16{8'h20}};  // Fill with spaces
+            lcd_str = {16{8'h20}};
             for (i = 0; i < 16 && i < s.len(); i++) begin
                 c = s[i];
                 lcd_str[127-(i*8) -: 8] = c;
@@ -265,10 +266,10 @@ module message_manager (
             STATE_DRINK_SELECT: begin
                 case (selected_drink_type)
                     DRINK_BLACK_COFFEE: line1_text_next = lcd_str("Drink: [Black]");
-                    DRINK_COFFEE_CREAM: line1_text_next = lcd_str("Drink: [Cream]");
+                    DRINK_ESPRESSO:     line1_text_next = lcd_str("Drink:[Esprso]");
                     DRINK_LATTE:        line1_text_next = lcd_str("Drink: [Latte]");
                     DRINK_MOCHA:        line1_text_next = lcd_str("Drink: [Mocha]");
-                    DRINK_HOT_CHOCOLATE:line1_text_next = lcd_str("Drink:[HotChoco]");
+                    DRINK_AMERICANO:    line1_text_next = lcd_str("Drink:[Amrcno]");
                     default:            line1_text_next = lcd_str("Drink: ?");
                 endcase
                 line2_text_next = lcd_str("<-> Select");
@@ -293,7 +294,7 @@ module message_manager (
                             SIZE_16OZ: line1_text_next = lcd_str("Black Coffee16z");
                         endcase
                     end
-                    DRINK_COFFEE_CREAM: begin
+                    DRINK_ESPRESSO: begin
                         case (selected_size)
                             SIZE_8OZ:  line1_text_next = lcd_str("Coffee+Cream 8z");
                             SIZE_12OZ: line1_text_next = lcd_str("Coffee+Cream12z");
@@ -314,7 +315,7 @@ module message_manager (
                             SIZE_16OZ: line1_text_next = lcd_str("Mocha 16oz");
                         endcase
                     end
-                    DRINK_HOT_CHOCOLATE: begin
+                    DRINK_AMERICANO: begin
                         case (selected_size)
                             SIZE_8OZ:  line1_text_next = lcd_str("Hot Choco 8oz");
                             SIZE_12OZ: line1_text_next = lcd_str("Hot Choco 12oz");
@@ -406,8 +407,6 @@ module message_manager (
             end
             
             STATE_MAINT_VIEW_ERRORS: begin
-                // UPDATED: Handle both view errors AND service time display
-                // Check if we're viewing service time (selected_maint_option == MAINT_SERVICE_TIME)
                 if (selected_maint_option == MAINT_SERVICE_TIME) begin
                     // Display service timer
                     line1_text_next = lcd_str("Time Since Srvc");

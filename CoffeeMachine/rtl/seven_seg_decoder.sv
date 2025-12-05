@@ -1,3 +1,11 @@
+//============================================================================
+// Module: water_temp_controller  
+// Description: Override now properly forces temp_ready
+// Author: Gabriel DiMartino
+// Date: November 2025
+// Course: CPEN-430 Digital System Design Lab
+//============================================================================
+
 module seven_seg_decoder (
     input  wire [3:0] digit,        // 0-15 input
     output reg  [6:0] segments      // Active-low 7-segment output

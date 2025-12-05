@@ -2,7 +2,6 @@
 // Module: sensor_interface
 // Description: Sensor interface with 2-bit level encoding
 //              Converts switch positions to consumable levels (0-255)
-//              UPDATED: Added 2Hz flashing LEDs for LOW levels
 // Author: Gabriel DiMartino
 // Date: November 2025
 // Course: CPEN-430 Digital System Design Lab
@@ -50,7 +49,7 @@ module sensor_interface (
     input  wire         SW17,               // Reset (handled in top module)
     
     //========================================================================
-    // Consumable Level Outputs (8-bit values for consumable_manager)
+    // Consumable Level Outputs
     //========================================================================
     output reg [7:0]    sensor_bin0_level,
     output reg [7:0]    sensor_bin1_level,
@@ -163,7 +162,7 @@ module sensor_interface (
     assign pressure_level = {SW11, SW10};
     
     //========================================================================
-    // Convert Paper Level to Boolean (for paper_filter_present)
+    // Convert Paper Level to Boolean 
     //========================================================================
     
     always @(posedge clk or negedge rst_n) begin

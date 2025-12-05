@@ -247,7 +247,7 @@ module coffee_machine_top (
     wire final_message_updated;
     
     // FSM state for LCD mux decision
-    wire [4:0] fsm_current_state;  // From main FSM
+    wire [4:0] fsm_current_state;
     
     // DEBUG: FSM state debug output
     wire [4:0] debug_fsm_state;
@@ -582,7 +582,7 @@ module coffee_machine_top (
         .selected_coffee_type(selected_coffee_type),
         .selected_drink_type(selected_drink_type),
         .selected_size(selected_size),
-        .selected_maint_option(selected_maint_option),  // FIXED: Added maintenance option output
+        .selected_maint_option(selected_maint_option),
         .start_brewing_cmd(start_brewing_cmd),
         .enter_settings_mode(enter_settings_mode),
         .enter_maintenance_mode(enter_maintenance_mode),
@@ -708,7 +708,7 @@ module coffee_machine_top (
         .error_present(error_present),
         .can_make_coffee(can_make_coffee),
         
-        // Service timer (NEW)
+        // Service timer
         .hours_since_service(hours_since_service),
         .days_since_service(days_since_service),
         
@@ -812,7 +812,7 @@ module coffee_machine_top (
     
     // Determine what to show based on state
     wire show_errors_warnings;
-    assign show_errors_warnings = error_cycle_enable;  // Show during error cycling
+    assign show_errors_warnings = error_cycle_enable;
     
     // Brew progress (HEX2, HEX1, HEX0)
     wire [3:0] progress_hundreds;
@@ -862,7 +862,7 @@ module coffee_machine_top (
         .segments(HEX5)
     );
     
-    // Error and warning counts (HEX7, HEX6) - show during splash/error states
+    // Error and warning counts (HEX7, HEX6)
     wire [3:0] hex7_value;
     wire [3:0] hex6_value;
     
